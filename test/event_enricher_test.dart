@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:test/test.dart';
+import 'package:liferadar_core/demo.dart';
 import 'package:liferadar_core/liferadar_core.dart';
 
 RadarEvent _event({String ko = '연극 [점프x컷]', List<String> tags = const ['culture', 'music']}) => RadarEvent(
@@ -83,5 +84,13 @@ void main() {
     expect(out.location.lat, e.location.lat);
     // 모델이 태그를 주지 않으면 — 기존 태그
     expect(AiEnrich.apply(e, const Enrichment(titleEn: 'X', descriptionEn: '', tags: [])).tags, e.tags);
+  });
+
+  test('캐시 키는 기존 캐시 파일과 같은 값 (BigInt, 웹 호환)', () {
+    // 이전 64비트 int 구현으로 계산해 cache/ai_en.json에 저장된 값.
+    String key(String id) => AiEnrich.cacheKey(sampleEvents.firstWhere((e) => e.id == id));
+    expect(key('ev-seoul-food-fest'), '-1c9d4b84dd8c2e73');
+    expect(key('ev-gangnam-run'), '58d3d06e9dd5fbeb');
+    expect(key('ev-pangyo-game-art'), '2f3537e33bec2f88');
   });
 }

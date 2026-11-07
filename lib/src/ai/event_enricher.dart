@@ -40,13 +40,18 @@ class Enrichment {
 
 class AiEnrich {
   /// 캐시 키: 한국어 텍스트가 바뀌지 않으면 다시 요청하지 않는다 (FNV-1a 64, 안정적).
+  ///
+  /// BigInt로 계산해 웹(JS)에서도 같은 값이 나온다. 표기는 기존 캐시 파일과 호환되도록
+  /// 부호 있는 64비트 정수의 16진수 (예: `-1c9d4b84dd8c2e73`).
   static String cacheKey(RadarEvent e) {
-    var h = 0xcbf29ce484222325;
+    final mask = (BigInt.one << 64) - BigInt.one;
+    final prime = BigInt.parse('100000001b3', radix: 16);
+    var h = BigInt.parse('cbf29ce484222325', radix: 16);
     for (final b in utf8.encode('${e.title.ko}\n${e.description.ko}')) {
-      h ^= b;
-      h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF;
+      h = ((h ^ BigInt.from(b)) * prime) & mask;
     }
-    return h.toUnsigned(64).toRadixString(16).padLeft(16, '0');
+    final signed = h >= (BigInt.one << 63) ? h - (BigInt.one << 64) : h;
+    return signed.toRadixString(16).padLeft(16, '0');
   }
 
   static const systemInstruction =
