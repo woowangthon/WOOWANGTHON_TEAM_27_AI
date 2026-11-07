@@ -1,0 +1,7 @@
+.dart_tool/
+.packages
+build/
+pubspec.lock.bak
+env.json
+.DS_Store
+pubspec.lock
