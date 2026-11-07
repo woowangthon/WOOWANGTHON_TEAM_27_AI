@@ -16,3 +16,5 @@ jobs:
       - run: dart pub get
       - run: dart analyze --fatal-infos
       - run: dart test
+      - name: dart test (Chrome — 웹 호환)
+        run: dart test -p chrome
