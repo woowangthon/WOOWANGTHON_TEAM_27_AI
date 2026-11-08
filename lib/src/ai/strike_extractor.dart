@@ -243,8 +243,8 @@ date_quote: EXACT phrase containing the start date; "" if no date.
   /// 날짜가 없는 기사는 같은 운영 주체·수단의 날짜 있는 사건이 하나뿐이면 그 사건에 합친다.
   /// 대표 기사는 가장 최근 기사이고, 날짜는 그룹 안에서 근거가 있는 날짜를 쓴다.
   static List<TransitStrike> merge(List<TransitStrike> strikes) {
-    String base(TransitStrike s) =>
-        '${s.operator.replaceAll(RegExp(r'\s|\(주\)|㈜|노조|노동조합|지부'), '')}|${s.mode.name}';
+    // 수단은 묶기 기준에서 뺀다: 같은 공항철도 기사를 모델이 rail/subway로 다르게 표기할 수 있다.
+    String base(TransitStrike s) => s.operator.replaceAll(RegExp(r'\s|\(주\)|㈜|주식회사|노동조합|노조|지부'), '');
     String key(TransitStrike s) => '${base(s)}|${s.start == null ? '-' : _ymd(s.start!)}';
 
     final dated = <String, Set<String>>{};
@@ -262,9 +262,13 @@ date_quote: EXACT phrase containing the start date; "" if no date.
     ]..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
   }
 
+  /// 대표 기사: 가장 최근 기사의 상태를 따르되, 제목에 "파업"이 있는 기사를 우선한다
+  /// (파업을 지나가듯 언급한 칼럼이 대표 링크가 되지 않게).
   static TransitStrike _representative(List<TransitStrike> group) {
     group.sort((a, b) => a.publishedAt.compareTo(b.publishedAt));
-    final latest = group.last;
+    final latestAny = group.last;
+    final titled = group.where((s) => s.articleTitle.contains('파업')).toList();
+    final latest = titled.isNotEmpty && titled.last.status == latestAny.status ? titled.last : latestAny;
     final withDate = group.lastWhere((s) => s.start != null, orElse: () => latest);
     return TransitStrike(
       id: latest.id,
