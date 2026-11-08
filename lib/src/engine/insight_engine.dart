@@ -18,6 +18,7 @@ class InsightEngine {
     this.maxNearbyPerPlan = 2,
     this.crowdKmReal = 3,
     this.maxDeadlines = 3,
+    this.maxTrafficPerPlan = 2,
   });
 
   /// 일정 장소에서 이 거리 이내의 행사를 "근처"로 본다.
@@ -35,6 +36,10 @@ class InsightEngine {
 
   /// 동시에 보여주는 마감 카드 수.
   final int maxDeadlines;
+
+  /// 일정 하나당 교통 통제 카드 수. 같은 도로가 여러 구간으로 나뉘어 오므로(ITS)
+  /// 제목이 같은 공지는 하나로 보고, 가까운 순으로 이만큼만 보여준다.
+  final int maxTrafficPerPlan;
 
   /// 실제 행사의 "혼잡" 참고는 이 거리 이내에서만 (샘플은 규모가 알려져 있음).
   final double crowdKmReal;
@@ -150,11 +155,16 @@ class InsightEngine {
         }
       }
 
-      // 1b) 공식 교통 영향 (TOPIS) — 일정 장소 근처, 일정 시작 전. 문장은 템플릿: 사실은 출처에서,
+      // 1b) 공식 교통 영향 (TOPIS·ITS) — 일정 장소 근처, 일정 시작 전. 문장은 템플릿: 사실은 출처에서,
       // Gemini가 다시 쓰지 않는다 (앱의 AI 문장 단계에서 제외). 이동수단 미확인 → CAUTION만.
-      for (final n in traffic) {
-        final m = trafficMatcher.evaluate(plan, n, now);
-        if (m.decision != TrafficDecision.caution) continue;
+      final trafficHits = <(TrafficNotice, TrafficMatch)>[
+        for (final n in traffic)
+          if (trafficMatcher.evaluate(plan, n, now) case final m when m.decision == TrafficDecision.caution) (n, m),
+      ]..sort((a, b) => a.$2.distanceKm!.compareTo(b.$2.distanceKm!));
+      final shownTitles = <String>{};
+      for (final (n, m) in trafficHits) {
+        if (shownTitles.length >= maxTrafficPerPlan) break;
+        if (!shownTitles.add(n.title)) continue; // 같은 도로의 다른 구간
         out.add(_trafficCard(plan, where, n, m));
       }
 

@@ -115,4 +115,32 @@ void main() {
     expect(card.body.en.toLowerCase(), isNot(contains('delay')));
     expect(card.sources.single.title, '서울시 TOPIS · 실시간 돌발정보');
   });
+
+  test('InsightEngine: 같은 도로의 여러 구간은 카드 하나, 일정당 최대 2개 (가까운 순)', () {
+    TrafficNotice road(String id, String title, double lat) => TrafficNotice(
+          id: id,
+          kind: TrafficKind.construction,
+          title: title,
+          detail: title,
+          start: DateTime(2026, 11, 8, 6),
+          end: DateTime(2026, 11, 30),
+          location: GeoPoint(lat, 126.9779),
+          source: 'its',
+          sourceName: '국가교통정보센터(ITS) · 돌발상황정보',
+        );
+    final list = const InsightEngine().build(
+      plans: [_plan()],
+      events: const [],
+      interests: const {},
+      now: _now,
+      traffic: [
+        road('a1', '[세종대로] 공사', 37.5670), // ~0.1 km
+        road('a2', '[세종대로] 공사', 37.5675), // 같은 도로, 다른 구간
+        road('b', '[을지로] 공사', 37.5690), // ~0.3 km
+        road('c', '[종로] 공사', 37.5700), // ~0.4 km — 한도 초과
+      ],
+    );
+    final ids = [for (final i in list) if (i.id.startsWith('traffic:')) i.id];
+    expect(ids, ['traffic:p1:a1', 'traffic:p1:b']);
+  });
 }
