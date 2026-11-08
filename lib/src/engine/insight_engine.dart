@@ -1,6 +1,7 @@
 import '../models/models.dart';
 import 'route_matcher.dart';
 import '../models/traffic.dart';
+import '../models/transit_strike.dart';
 import 'taste.dart';
 import 'traffic_matcher.dart';
 
@@ -52,6 +53,7 @@ class InsightEngine {
     Map<String, DailyWeather> weatherByPlanId = const {},
     Taste taste = Taste.none,
     List<TrafficNotice> traffic = const [],
+    List<TransitStrike> strikes = const [],
     TrafficMatcher trafficMatcher = const TrafficMatcher(),
   }) {
     // 관심사 적합도 + 피드백으로 학습한 취향 (👍 비슷한 것은 위로, 👎 아래로).
@@ -166,6 +168,17 @@ class InsightEngine {
         if (shownTitles.length >= maxTrafficPerPlan) break;
         if (!shownTitles.add(n.title)) continue; // 같은 도로의 다른 구간
         out.add(_trafficCard(plan, where, n, m));
+      }
+
+      // 1c) 뉴스 보도의 대중교통 파업 (예고·조건부·진행 중) — 일정 지역과 날짜가 맞을 때 참고 카드 하나.
+      // 공식 공지가 아니므로 알림을 보내지 않고, 문장은 템플릿 + 기사 인용 (AI가 다시 쓰지 않음).
+      if (plan.location != null && !plan.end.isBefore(now)) {
+        final hits = [
+          for (final s in strikes)
+            if (s.isActive && KoreaRegions.covers(s.regions, plan.location!))
+              if (_strikeDay(s) case final day? when _overlaps(plan.start, plan.end, day, day)) (s, day),
+        ]..sort((a, b) => b.$1.sourceCount.compareTo(a.$1.sourceCount));
+        if (hits.isNotEmpty) out.add(_strikeCard(plan, where, hits.first.$1, hits.first.$2));
       }
 
       // 2) 일정 날의 비
@@ -353,6 +366,59 @@ class InsightEngine {
         Signal(SignalType.event, LocalizedText(ko: n.title, en: n.title)),
       ],
       sources: [SourceLink(n.sourceName, n.sourceUrl)],
+    );
+  }
+
+  /// 파업 영향일: 근거 있는 시작일, 없으면 진행 중 보도의 발행일. 종료 미상은 그날 하루만 본다
+  /// (판별 로직: 종료 미상을 무기한 활성화하지 않는다).
+  static DateTime? _strikeDay(TransitStrike s) {
+    final d = s.start ?? (s.status == StrikeStatus.ongoing ? s.publishedAt : null);
+    return d == null ? null : DateTime(d.year, d.month, d.day);
+  }
+
+  Insight _strikeCard(Plan plan, String where, TransitStrike s, DateTime day) {
+    final modeKo = switch (s.mode) {
+      TransitMode.bus => '버스',
+      TransitMode.subway => '지하철',
+      TransitMode.rail => '철도',
+      TransitMode.unknown => '대중교통',
+    };
+    final modeEn = switch (s.mode) {
+      TransitMode.bus => 'bus',
+      TransitMode.subway => 'subway',
+      TransitMode.rail => 'rail',
+      TransitMode.unknown => 'transit',
+    };
+    final (statusKo, statusEn) = switch (s.status) {
+      StrikeStatus.conditional => ('조건부 예고', 'conditionally planned'),
+      StrikeStatus.ongoing => ('진행 중', 'ongoing'),
+      _ => ('예고', 'planned'),
+    };
+    final who = s.operator.isNotEmpty ? s.operator : '${s.regions.join('·')} $modeKo';
+    final whoEn = s.operator.isNotEmpty ? s.operator : '${s.regions.join('/')} $modeEn';
+    return Insight(
+      id: 'strike:${plan.id}:${s.id}',
+      kind: InsightKind.planAlert,
+      planId: plan.id,
+      title: LocalizedText(
+        ko: '$who 파업 $statusKo (${_dateKo(day)})',
+        en: '$whoEn strike $statusEn (${_dateEn(day)})',
+      ),
+      body: LocalizedText(
+        ko: '$where 일정 기간에 $who 파업이 $statusKo되어 있다는 보도가 있습니다. '
+            '$modeKo를 이용할 예정이라면 출발 전에 운행 정보를 확인해 주세요.',
+        en: 'News reports a $statusEn $whoEn strike during your $where plan. '
+            'If you plan to use the $modeEn, check the service status before you go.',
+      ),
+      why: LocalizedText(
+        ko: '뉴스 보도 ${s.sourceCount}건: "${s.quote}" — 공식 공지가 아니므로 참고용입니다.',
+        en: 'Based on ${s.sourceCount} news report(s): "${s.quote}" — not an official notice.',
+      ),
+      confidence: _round(0.45 + 0.03 * (s.sourceCount - 1).clamp(0, 5)),
+      signals: [
+        Signal(SignalType.traffic, LocalizedText(ko: '$modeKo 파업 $statusKo', en: '$modeEn strike $statusEn')),
+      ],
+      sources: [SourceLink(s.articleTitle, s.url)],
     );
   }
 
