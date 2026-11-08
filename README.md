@@ -76,6 +76,7 @@ GEMINI_API_KEY=... dart run tool/eval_insight_writer.dart --date=2026-11-07
 | `RouteMatcher` | 출발→도착 경로 주변 기회 | 폴리라인 단순화(2500→~400점) → 같은 날짜 + 경로 15 km 회랑 → 점수 = 관심사 60% + 가까움 40%. 대중교통은 가장 가까운 역에서의 투영점으로 우회 거리 계산 |
 | `TrafficMatcher` | 공식 교통 통제(서울 TOPIS · 전국 ITS) × 일정 | 팀 문서 「집회·마라톤·축제 이동 영향 판별 로직」 §6~§9: 반열린 구간 `[start, end)`, 일정 전 2시간 탐지 구간, 1 km 인근, 종료 미상은 시작 날짜에만, 이동수단 미확인이면 최대 `CAUTION`. 같은 도로의 여러 구간은 카드 하나, 일정당 최대 2개(가까운 순) |
 | `Taste` | 👍/👎/숨기기 → 취향 | 평가한 행사의 태그·카테고리에 ±0.4 가중치 → 비슷한 행사의 점수 이동. 관심사 밖의 주제는 추가하지 않음, 평가한 카드 자체는 그대로(취소 가능) |
+| `ItsTraffic` | 전국 교통 통제 파서 | 국가교통정보센터 돌발상황 중 공사·행사·기상·재난만 선별 (정체·사고 제외), 종료 미상은 추정하지 않음. ITS가 해외 IP(GitHub Actions)를 차단해 **앱이 한국 내 기기에서 직접 조회**하므로 파서를 공용 모듈에 둔다 |
 | `demo` | 시연 시나리오 | 부산 출장·대전 세미나 등 `샘플` 데이터. 날짜가 지나면 주 단위로 자동 이동해 시연이 낡지 않음 |
 
 ## 구조
@@ -88,8 +89,9 @@ lib/
     ├── models/                # RadarEvent, Plan, Insight, TrafficNotice …
     ├── engine/                # InsightEngine, RouteMatcher, TrafficMatcher, Taste
     ├── ai/                    # InsightWriter, AiEnrich, GeminiClient
+    ├── sources/               # ItsTraffic — 국가교통정보센터 돌발상황 파서 (앱이 직접 조회)
     └── demo/                  # 시나리오 데이터
-test/                          # 43개 테스트
+test/                          # 49개 테스트
 tool/eval_insight_writer.dart  # 실제 API 평가
 ```
 
@@ -122,7 +124,7 @@ dart analyze --fatal-infos
 dart test
 ```
 
-43개 테스트 (GitHub Actions CI, VM + Chrome): 인사이트 규칙, 경로 회랑·투영, 교통 판별 사례(D02·D03·D06·D07·D14), 취향 재정렬, AI 응답 검증(지어낸 숫자 거부, 깨진 JSON, 언어), 캐시 키 웹/VM 일치, Gemini 예비 모델 전환, 시연 날짜 이동.
+49개 테스트 (GitHub Actions CI, VM + Chrome): 인사이트 규칙, 경로 회랑·투영, 교통 판별 사례(D02·D03·D06·D07·D14), 취향 재정렬, AI 응답 검증(지어낸 숫자 거부, 깨진 JSON, 언어), 캐시 키 웹/VM 일치, Gemini 예비 모델 전환, 시연 날짜 이동.
 
 ## 직접 구현 범위와 외부 기술
 
