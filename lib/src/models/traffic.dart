@@ -40,6 +40,15 @@ class TrafficNotice {
   /// 행사나 집회로 인한 영향 (팀 판별 로직 문서의 핵심 범위).
   bool get isGathering => kind == TrafficKind.rally || kind == TrafficKind.event;
 
+  /// [now] 기준으로 보여줄 공지인지: [horizonDays]일 안에 시작하고, 아직 끝나지 않았다.
+  /// 종료 시각이 없으면 시작한 날까지만 유효하다고 본다 (판별 로직: 종료 미상을 무기한 활성화하지 않는다).
+  bool isRelevantAt(DateTime now, {int horizonDays = 28}) {
+    final today = DateTime(now.year, now.month, now.day);
+    if (!start.isBefore(now.add(Duration(days: horizonDays)))) return false;
+    final e = end;
+    return e == null ? !start.isBefore(today) : e.isAfter(now);
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'kind': kind.name,
