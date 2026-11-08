@@ -242,4 +242,26 @@ void main() {
       );
     });
   });
+
+  test('묶기: 수단 표기가 달라도 같은 사건, 대표 기사는 제목에 "파업"이 있는 기사', () {
+    TransitStrike s(String title, TransitMode mode, DateTime pub) =>
+        TransitStrike(
+          id: title,
+          mode: mode,
+          operator: '공항철도',
+          regions: const ['인천'],
+          status: StrikeStatus.scheduled,
+          quote: 'q',
+          start: DateTime(2026, 11, 13),
+          articleTitle: title,
+          url: 'u-$title',
+          publishedAt: pub,
+        );
+    final merged = StrikeExtractor.merge([
+      s('공항철도 13일 경고파업 예고', TransitMode.rail, DateTime(2026, 11, 6)),
+      s('주말 칼럼: 겨울의 풍경', TransitMode.subway, DateTime(2026, 11, 8)),
+    ]);
+    expect(merged.single.sourceCount, 2);
+    expect(merged.single.articleTitle, '공항철도 13일 경고파업 예고');
+  });
 }
