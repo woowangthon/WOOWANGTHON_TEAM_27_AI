@@ -22,7 +22,7 @@ void main() {
     expect(RouteMatcher.distanceToPolylineKm(const GeoPoint(36.3320, 127.4340), route), lessThan(0.5));
   });
 
-  test('20-noyabr: Daejeon AI seminar topiladi, Seoul COEX (dekabr) topilmaydi', () {
+  test('11월 20일: 대전 AI 세미나는 찾고, 서울 COEX (12월)는 찾지 않는다', () {
     final opps = matcher.match(
       route: route,
       events: sampleEvents,
