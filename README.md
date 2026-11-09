@@ -26,6 +26,7 @@
 | 번역 | **Gemini** (`AiEnrich`, BE에서 실행) | 한국어 행사명·설명 → 영어, 허용된 26개 관심사 태그 선택 | 날짜·장소·요금 변경 |
 | 뉴스 판독 | **Gemini** (`StrikeExtractor`, BE에서 실행) | 검색된 뉴스가 국내 대중교통 파업인지, 상태(예고·진행·철회·종료…)·날짜·지역을 판단 | 근거 없는 상태·날짜 확정 |
 | 자기소개 → 관심사 | **Gemini** (`ProfileExtractor`, 앱에서 실행) | 사용자가 자유롭게 쓴 소개글에서 지금 상황(학생·구직·직장인·창업·프리랜서)과 관심사 태그를 **제안** | 사용자 대신 저장, 글에 없는 내용 추측 |
+| 앱 안 AI 비서 | **Gemini** (`Assistant`, 앱에서 실행) | 질문에 답하고 추천 행사·행동(캘린더 추가·지도 보기)을 **제안** | 후보 밖 행사 언급, 행동 실행 (사용자가 확인) |
 | 검증 | **코드** | 응답의 숫자가 입력 사실에 있는지, 한국어 문장이 한국어인지, id·형식이 맞는지 | — |
 
 ## AI 활용 상세
@@ -81,7 +82,23 @@
 
 ①에서 경량 모델이 한글 근거를 20~30% 깨뜨렸다 (`"카허라라마시마지ᄇ 탄바어"`, 결합 문자만 있는 문자열). 인용 검증이 모두 걸러 **잘못된 내용이 화면에 나가지는 않았지만**, 맞는 제안까지 사라졌다. 그래서 근거를 번호로 받도록 바꿨고, 같은 소개글에서 깨진 근거가 0건이 됐다. 부정 표현("운동은 별로 안 좋아하고")은 세 번 모두 운동 태그로 제안하지 않았다. 기대 밖 2건은 "investor meetups" → 재테크(`finance`)로, 사용자가 화면에서 끌 수 있다.
 
-### 5. 전송 — `GeminiClient`
+### 5. 앱 안의 AI 비서 — `Assistant`
+"이번 주말 서울에서 뭐 하지?", "Busan trip 때 갈 만한 곳?", "마감 임박한 창업 공고" 같은 질문에 답한다. **AI는 찾지 않고, 코드가 찾은 것 중에서 고르고 말한다.**
+
+```
+질문 ─▶ AssistantQuery.parse (코드)       날짜(오늘·주말·11월 20일)·지역(Busan→부산)·종류·무료·마감, 일정 이름/날짜 → 그 일정의 기간·장소
+     ─▶ Assistant.retrieve (코드)         실제 행사 885건에서 조건 + 관심사·취향 점수로 후보 24개
+     ─▶ Gemini (CONTEXT = 후보·내 일정·신호만)  짧은 답 + 추천 id(≤5) + 제안 행동
+     ─▶ parseResponse (코드)              후보 밖 id·행동 버림, 장소 없는 공고는 지도 보기 불가,
+                                          답의 두 자리 이상 숫자가 CONTEXT에 없으면 답 문장을 규칙 문장으로
+     ─▶ 화면                              카드(실제 데이터) + [캘린더에 추가] [취소] — 사용자가 결정
+```
+
+- 대화 기억: 최근 6턴. 키가 없거나 할당량이 끝나면 같은 후보로 규칙 문장(`fallback`) — "AI" 표시 없이.
+
+**실측 (2026-11-09, 실제 행사 데이터 + 질문 7개 → `tool/eval_assistant.dart`)**: AI 답 7/7, 후보 밖 행사 0건, 검증 대체 0건, 응답 약 1.1~1.7초. 가격 질문("제일 싼 공연이 얼마야?")에 "전석 3,000원" — 데이터의 요금 문구에 있는 숫자라 통과. 첫 실행에서 "11월 20일 일정에 영향 줄 만한 거?"가 일정을 찾지 못해 마감 공고만 답한 것을 발견 → 날짜로 가리킨 일정도 찾도록 수정 (테스트 포함).
+
+### 6. 전송 — `GeminiClient`
 - 기본 모델이 실패(할당량·과부하)하면 예비 모델로 넘어간다. 모델마다 1회만 시도해 UI가 오래 기다리지 않는다.
 
 ## 실측 평가 (실제 Gemini API)
@@ -125,13 +142,14 @@ lib/
 └── src/
     ├── models/                # RadarEvent, Plan, Insight, TrafficNotice, LifeStage …
     ├── engine/                # InsightEngine, RouteMatcher, TrafficMatcher, Taste
-    ├── ai/                    # InsightWriter, StrikeExtractor, ProfileExtractor, AiEnrich, GeminiClient
+    ├── ai/                    # Assistant, InsightWriter, StrikeExtractor, ProfileExtractor, AiEnrich, GeminiClient
     ├── sources/               # ItsTraffic — 국가교통정보센터 돌발상황 파서 (앱이 직접 조회)
     └── demo/                  # 시나리오 데이터
-test/                          # 63개 테스트
+test/                          # 73개 테스트
 tool/eval_insight_writer.dart  # 카드 문장 실측 평가
 tool/eval_strike_extractor.dart # 뉴스 파업 판독 실측 평가
 tool/eval_profile_extractor.dart # 자기소개 → 관심사 제안 실측 평가
+tool/eval_assistant.dart       # 앱 AI 비서 실측 평가 (실제 행사 데이터)
 ```
 
 ## 사용
@@ -163,7 +181,7 @@ dart analyze --fatal-infos
 dart test
 ```
 
-63개 테스트 (GitHub Actions CI, VM + Chrome): 인사이트 규칙, 자기소개 제안 검증(글 밖 번호·허용 밖 태그 거부, 키워드 대체), 상황별 순위, 경로 회랑·투영, 교통 판별 사례(D02·D03·D06·D07·D14), 취향 재정렬, AI 응답 검증(지어낸 숫자 거부, 깨진 JSON, 언어), 캐시 키 웹/VM 일치, Gemini 예비 모델 전환, 시연 날짜 이동.
+73개 테스트 (GitHub Actions CI, VM + Chrome): AI 비서(질문 읽기·후보 찾기·지어낸 숫자/id 거부), 인사이트 규칙, 자기소개 제안 검증(글 밖 번호·허용 밖 태그 거부, 키워드 대체), 상황별 순위, 경로 회랑·투영, 교통 판별 사례(D02·D03·D06·D07·D14), 취향 재정렬, AI 응답 검증(지어낸 숫자 거부, 깨진 JSON, 언어), 캐시 키 웹/VM 일치, Gemini 예비 모델 전환, 시연 날짜 이동.
 
 ## 직접 구현 범위와 외부 기술
 

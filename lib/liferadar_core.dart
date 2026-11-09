@@ -4,9 +4,11 @@
 /// - 엔진 (결정론적 규칙): [InsightEngine], [RouteMatcher], [TrafficMatcher], [Taste]
 /// - 교통 출처: [ItsTraffic] 국가교통정보센터 돌발상황 파서 (앱이 직접 조회)
 /// - AI (Gemini): [InsightWriter] 카드 문장 + 근거 검증, [StrikeExtractor] 뉴스 파업 추출 + 인용 검증,
+///   [Assistant] 앱 안의 AI 비서 (코드가 후보를 찾고 Gemini가 답, id·숫자 검증),
 ///   [ProfileExtractor] 자기소개 → 상황·관심사 제안 + 인용 검증, [AiEnrich] 번역·태깅, [GeminiClient]
 library;
 
+export 'src/ai/assistant.dart';
 export 'src/ai/event_enricher.dart';
 export 'src/ai/gemini_client.dart';
 export 'src/ai/insight_writer.dart';
