@@ -1,3 +1,4 @@
+import '../models/life_stage.dart';
 import '../models/models.dart';
 
 /// 사용자 피드백(👍 / 👎 / 숨기기)으로부터 학습된 취향.
@@ -5,10 +6,23 @@ import '../models/models.dart';
 /// 각 평가는 해당 행사의 태그와 카테고리에 가중치를 추가한다. 이후 다른
 /// 행사들은 [bias]를 통해 위나 아래로 이동된다: 예를 들어 👎를 누른 축제와 유사한
 /// 축제는 낮게 내려간다. 순수 Dart, 결정론적 (테스트 가능, 서버로 이전 가능).
+///
+/// [stage](사용자의 지금 상황)가 있으면 그 상황에 맞는 행사를 조금 올린다 — 관심사에 없더라도
+/// (예: 학생에게 장학금 공고) 낮은 점수로 후보에 들어온다.
 class Taste {
-  const Taste._(this._tags, this._categories, this.rated);
+  const Taste._(this._tags, this._categories, this.rated, [this.stage]);
 
   static const none = Taste._({}, {}, {});
+
+  /// 사용자의 지금 상황 (온보딩·설정에서 고름). null = 정보 없음.
+  final LifeStage? stage;
+
+  /// 상황에 맞는 행사: 관심사 일치가 있으면 +[_stageBoost], 없으면 [_stageOnly].
+  static const _stageBoost = 0.15;
+  static const _stageOnly = 0.2;
+
+  /// 같은 피드백 취향에 상황만 바꾼 것.
+  Taste withStage(LifeStage? s) => Taste._(_tags, _categories, rated, s);
 
   final Map<String, double> _tags;
   final Map<EventCategory, double> _categories;
@@ -60,10 +74,11 @@ class Taste {
   /// 관심사 적합도 (0..1) + 취향. 관심사에 전혀 맞지 않으면 0으로 남아 취향이 새로운
   /// 주제를 추가하지 않고 순서만 변경함. 평가된 event 자체는 자동으로 이동하지 않음.
   double score(RadarEvent e, Set<String> interests) {
-    if (e.tags.isEmpty) return 0;
-    final interest = e.tags.where(interests.contains).length / e.tags.length;
-    if (interest == 0 || rated.contains(e.id)) return interest;
-    return (interest + bias(e)).clamp(0.0, 1.0);
+    final fitsStage = stage?.fits(e) ?? false;
+    final interest = e.tags.isEmpty ? 0.0 : e.tags.where(interests.contains).length / e.tags.length;
+    if (interest == 0) return fitsStage && !rated.contains(e.id) ? _stageOnly : 0;
+    if (rated.contains(e.id)) return interest;
+    return (interest + bias(e) + (fitsStage ? _stageBoost : 0)).clamp(0.0, 1.0);
   }
 
   /// 인사이트 id에서 행사 id 추출: `nearby:<plan>:<event>`, `crowd:…`, `deadline:<event>`, `opportunity:<event>`.
