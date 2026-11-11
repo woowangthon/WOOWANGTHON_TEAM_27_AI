@@ -39,8 +39,8 @@ void main() {
   test('공사 → 교통 통제 공지: 시간·좌표·제목·원문', () {
     final n = ItsTraffic.parse(ItsTraffic.rows(_response([_item()])).single)!;
     expect(n.kind, TrafficKind.construction);
-    expect(n.start, DateTime(2026, 8, 24));
-    expect(n.end, DateTime(2026, 11, 30));
+    expect(n.start, trafficInstant('2026-08-24T00:00:00'));
+    expect(n.end, trafficInstant('2026-11-30T00:00:00'));
     expect(n.location.lat, closeTo(36.3504, 1e-9)); // coordY = 위도
     expect(n.location.lng, closeTo(127.3845, 1e-9)); // coordX = 경도
     expect(n.title, '[한밭대로] 공사 · 시설물보수작업');

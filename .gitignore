@@ -5,3 +5,6 @@ pubspec.lock.bak
 env.json
 .DS_Store
 pubspec.lock
+
+# Local deterministic test scratch
+.test-tmp/

@@ -18,8 +18,16 @@ export 'src/engine/insight_engine.dart';
 export 'src/engine/route_matcher.dart';
 export 'src/engine/taste.dart';
 export 'src/engine/traffic_matcher.dart';
+export 'src/engine/news_traffic_matcher.dart';
 export 'src/models/life_stage.dart';
 export 'src/models/models.dart';
 export 'src/models/traffic.dart';
 export 'src/models/transit_strike.dart';
+export 'src/models/news_traffic.dart';
 export 'src/sources/its_traffic.dart';
+export 'src/sources/travel_impact.dart';
+
+export 'src/models/traffic_time.dart';
+export 'src/engine/traffic_merger.dart';
+
+export 'src/models/traffic_withdrawal.dart';

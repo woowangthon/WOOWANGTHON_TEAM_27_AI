@@ -1,5 +1,7 @@
 import '../models/models.dart';
 import '../models/traffic.dart';
+import '../models/traffic_time.dart';
+import '../models/news_traffic.dart';
 import 'route_matcher.dart';
 
 /// 공식 교통 영향 × 사용자 일정 → 판정.
@@ -36,15 +38,20 @@ class TrafficMatcher {
   /// "근처" 기준 — 탐지 설정이며 혼잡 확산 반경이 아니다.
   final double nearbyKm;
 
-  static const ruleVersion = '1.0';
+  static const ruleVersion = '1.1';
 
-  TrafficMatch evaluate(Plan plan, TrafficNotice n, DateTime now) {
+  TrafficMatch evaluate(Plan plan, TrafficNotice n, DateTime now, {TripContext? trip}) {
+    if (!n.isRelevantAt(now)) return const TrafficMatch(TrafficDecision.ignore, TimeMatch.none, SpaceMatch.unknown, null, ['NOTICE_EXPIRED_OR_INVALID']);
     // 문서 §9 2행: 일정이 이미 시작되었으면 새 사전 경고 없음.
-    if (!plan.start.isAfter(now)) {
+    if (!trafficUtc(plan.start).isAfter(trafficUtc(now)) || plan.attendance == 'online') {
       return const TrafficMatch(TrafficDecision.ignore, TimeMatch.none, SpaceMatch.unknown, null, ['SCHEDULE_INELIGIBLE']);
     }
-    final time = matchTime(plan, n);
-    final (space, km) = matchSpace(plan, n);
+    if (n.isGathering && !n.hasControlEvidence) return const TrafficMatch(TrafficDecision.ignore, TimeMatch.none, SpaceMatch.unknown, null, ['CONTROL_UNCONFIRMED']);
+    final time = matchTime(plan, n, trip: trip);
+    final (space, km) = matchSpace(plan, n, trip: trip);
+    if (trip != null && trip.modes.isNotEmpty && !trip.modes.any(const {'car', 'taxi', 'bus'}.contains)) {
+      return TrafficMatch(TrafficDecision.ignore, time, space, km, const ['MODE_NOT_APPLICABLE']);
+    }
     if (time == TimeMatch.none || space == SpaceMatch.none) {
       return TrafficMatch(TrafficDecision.ignore, time, space, km, const ['NO_OVERLAP']);
     }
@@ -53,23 +60,38 @@ class TrafficMatcher {
     }
     // 이동수단 미확인 → CAUTION (문서 §9 9행). "지연 확정"이라고 말하지 않는다.
     return TrafficMatch(
-      TrafficDecision.caution,
+      n.referenceAt(now) ? TrafficDecision.reference : time == TimeMatch.exact && trip != null && trip.modes.length == 1 ? TrafficDecision.recommend : TrafficDecision.caution,
       time,
       space,
       km,
       [
         time == TimeMatch.window ? 'WINDOW_MATCH' : time == TimeMatch.date ? 'DATE_MATCH' : 'POSSIBLE_MATCH',
         'NEARBY',
-        'MODE_UNKNOWN',
+        if (!n.hasControlEvidence) 'CONTROL_UNCONFIRMED',
+        if (n.conflict) 'EVIDENCE_CONFLICT',
+        if (n.end == null) 'END_UNKNOWN',
+        if (n.timePrecision != 'minute') 'TIME_PRECISION_LIMIT',
+        if (n.source == 'utic' && n.staleAt(now)) 'STALE_DATA',
+        if (trip == null || trip.modes.isEmpty) 'MODE_UNKNOWN' else 'MODE_APPLICABLE',
       ],
     );
   }
 
-  TimeMatch matchTime(Plan plan, TrafficNotice n) {
+  TimeMatch matchTime(Plan plan, TrafficNotice n, {TripContext? trip}) {
+    if (trip != null && trip.timeConfirmed) {
+      final lo = trip.passageAt ?? trip.departure, hi = trip.passageAt ?? trip.arrival;
+      if (hi.isBefore(lo)) return TimeMatch.unknown;
+      if (n.end == null) {
+        return _day(n.start) == _day(lo) && !trafficUtc(hi).isBefore(trafficUtc(n.start)) ? TimeMatch.possible : TimeMatch.none;
+      }
+      final matched = trip.passageAt != null ? !trafficUtc(lo).isBefore(trafficUtc(n.start)) && trafficUtc(lo).isBefore(trafficUtc(n.end!))
+          : overlaps(lo, hi, n.start, n.end!);
+      return matched ? TimeMatch.exact : TimeMatch.none;
+    }
     if (plan.isAllDay) {
       // 날짜만: 일정 날짜 중 하나가 영향 날짜와 겹치는지.
       final days = <DateTime>[];
-      for (var d = _day(plan.start); d.isBefore(plan.end); d = DateTime(d.year, d.month, d.day + 1)) {
+      for (var d = _day(plan.start); d.isBefore(trafficUtc(plan.end)); d = d.add(const Duration(days: 1))) {
         days.add(d);
       }
       return days.any((d) => _coversDay(n, d)) ? TimeMatch.date : TimeMatch.none;
@@ -80,12 +102,16 @@ class TrafficMatcher {
     if (end == null) {
       // 종료 미상: 무기한 활성화하지 않는다 — 시작 날짜에만, 시작된 경우에만.
       if (_day(n.start) != _day(windowStart) && _day(n.start) != _day(windowEnd)) return TimeMatch.none;
-      return n.start.isBefore(windowEnd) ? TimeMatch.possible : TimeMatch.none;
+      return trafficUtc(n.start).isBefore(trafficUtc(windowEnd)) ? TimeMatch.possible : TimeMatch.none;
     }
     return overlaps(windowStart, windowEnd, n.start, end) ? TimeMatch.window : TimeMatch.none;
   }
 
-  (SpaceMatch, double?) matchSpace(Plan plan, TrafficNotice n) {
+  (SpaceMatch, double?) matchSpace(Plan plan, TrafficNotice n, {TripContext? trip}) {
+    if (trip != null && trip.points.length > 1) {
+      final km = RouteMatcher.distanceToPolylineKm(n.location, trip.points);
+      return (km <= nearbyKm ? SpaceMatch.nearby : SpaceMatch.none, km);
+    }
     final at = plan.location;
     if (at == null) return (SpaceMatch.unknown, null);
     final km = RouteMatcher.haversineKm(at, n.location);
@@ -94,14 +120,14 @@ class TrafficMatcher {
 
   /// 반열린 구간: 경계가 맞닿는 것은 겹침이 아니다.
   static bool overlaps(DateTime aStart, DateTime aEnd, DateTime bStart, DateTime bEnd) =>
-      (aStart.isAfter(bStart) ? aStart : bStart).isBefore(aEnd.isBefore(bEnd) ? aEnd : bEnd);
+      (trafficUtc(aStart).isAfter(trafficUtc(bStart)) ? trafficUtc(aStart) : trafficUtc(bStart)).isBefore(trafficUtc(aEnd).isBefore(trafficUtc(bEnd)) ? trafficUtc(aEnd) : trafficUtc(bEnd));
 
   static bool _coversDay(TrafficNotice n, DateTime day) {
-    final next = DateTime(day.year, day.month, day.day + 1);
+    final next = day.add(const Duration(days: 1));
     final end = n.end;
     if (end == null) return _day(n.start) == day;
     return overlaps(day, next, n.start, end);
   }
 
-  static DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
+  static DateTime _day(DateTime d) => trafficDay(d);
 }

@@ -2,8 +2,11 @@ import '../models/models.dart';
 import 'route_matcher.dart';
 import '../models/traffic.dart';
 import '../models/transit_strike.dart';
+import '../models/news_traffic.dart';
 import 'taste.dart';
 import 'traffic_matcher.dart';
+import 'traffic_merger.dart';
+import '../models/traffic_time.dart';
 
 /// "Connect the dots" — 일정 × 행사 × 날씨 × 관심사 → 인사이트 카드.
 ///
@@ -55,6 +58,8 @@ class InsightEngine {
     List<TrafficNotice> traffic = const [],
     List<TransitStrike> strikes = const [],
     TrafficMatcher trafficMatcher = const TrafficMatcher(),
+    DateTime? trafficNow,
+    Map<String, TripContext> tripsByPlanId = const {},
   }) {
     // 관심사 적합도 + 피드백으로 학습한 취향 (👍 비슷한 것은 위로, 👎 아래로).
     double interestOf(RadarEvent e) => taste.score(e, interests);
@@ -160,13 +165,14 @@ class InsightEngine {
       // 1b) 공식 교통 영향 (TOPIS·ITS) — 일정 장소 근처, 일정 시작 전. 문장은 템플릿: 사실은 출처에서,
       // Gemini가 다시 쓰지 않는다 (앱의 AI 문장 단계에서 제외). 이동수단 미확인 → CAUTION만.
       final trafficHits = <(TrafficNotice, TrafficMatch)>[
-        for (final n in traffic)
-          if (trafficMatcher.evaluate(plan, n, now) case final m when m.decision == TrafficDecision.caution) (n, m),
+        for (final n in TrafficMerger.merge(traffic, now: trafficNow ?? now))
+          if (trafficMatcher.evaluate(plan, n, trafficNow ?? now, trip: tripsByPlanId[plan.id]) case final m
+              when m.decision == TrafficDecision.caution || m.decision == TrafficDecision.recommend || m.decision == TrafficDecision.reference) (n, m),
       ]..sort((a, b) => a.$2.distanceKm!.compareTo(b.$2.distanceKm!));
       final shownTitles = <String>{};
       for (final (n, m) in trafficHits) {
         if (shownTitles.length >= maxTrafficPerPlan) break;
-        if (!shownTitles.add(n.title)) continue; // 같은 도로의 다른 구간
+        if (!shownTitles.add(n.groupId ?? n.id)) continue; // 같은 도로의 다른 구간
         out.add(_trafficCard(plan, where, n, m));
       }
 
@@ -176,7 +182,7 @@ class InsightEngine {
         final hits = [
           for (final s in strikes)
             if (s.isActive && KoreaRegions.covers(s.regions, plan.location!))
-              if (_strikeDay(s) case final day? when _overlaps(plan.start, plan.end, day, day)) (s, day),
+              if (_strikeDay(s) case final day? when _overlaps(plan.start, plan.end, day, s.end ?? day)) (s, day),
         ]..sort((a, b) => b.$1.sourceCount.compareTo(a.$1.sourceCount));
         if (hits.isNotEmpty) out.add(_strikeCard(plan, where, hits.first.$1, hits.first.$2));
       }
@@ -321,6 +327,7 @@ class InsightEngine {
   }
 
   Insight _trafficCard(Plan plan, String where, TrafficNotice n, TrafficMatch m) {
+    final reference = m.decision == TrafficDecision.reference || !n.hasControlEvidence || n.conflict || n.end == null || n.timePrecision != 'minute';
     final (whatKo, whatEn) = switch (n.kind) {
       TrafficKind.rally => ('집회', 'a rally'),
       TrafficKind.event => ('행사', 'an event'),
@@ -329,31 +336,35 @@ class InsightEngine {
       TrafficKind.weather => ('기상', 'weather'),
       TrafficKind.other => ('돌발 상황', 'an incident'),
     };
-    String hm(DateTime d) => '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    String hm(DateTime value) { final d = trafficKst(value); return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}'; }
     final end = n.end;
-    final periodKo = '${_dateKo(n.start)} ${hm(n.start)} ~ ${end == null ? '종료 시각 미확인' : '${_dateKo(end)} ${hm(end)}'}';
-    final periodEn = '${_dateEn(n.start)} ${hm(n.start)} – ${end == null ? 'end time not announced' : '${_dateEn(end)} ${hm(end)}'}';
+    final periodKo = '${_dateKo(trafficKst(n.start))} ${hm(n.start)} ~ ${end == null ? '종료 시각 미확인' : '${_dateKo(trafficKst(end))} ${hm(end)}'}';
+    final periodEn = '${_dateEn(trafficKst(n.start))} ${hm(n.start)} – ${end == null ? 'end time not announced' : '${_dateEn(trafficKst(end))} ${hm(end)}'}';
     final km = m.distanceKm!.toStringAsFixed(1);
     final whenKo = switch (m.time) {
       TimeMatch.window => '일정 시작 전 시간대에',
+      TimeMatch.exact => '저장한 이동 시간대에',
       TimeMatch.date => '일정 날짜에',
       _ => '일정 날짜에 (시간 확인 필요)',
     };
     final whenEn = switch (m.time) {
       TimeMatch.window => 'in the hours before your plan starts',
+      TimeMatch.exact => 'during your saved travel time',
       TimeMatch.date => 'on your plan day',
       _ => 'on your plan day (check the time)',
     };
     return Insight(
-      id: 'traffic:${plan.id}:${n.id}',
+      id: 'traffic:${plan.id}:${n.groupId ?? n.id}',
+      trafficContext: n,
+      notificationEligible: !reference && n.source != 'utic' && !n.evidenceRefs.any((e) => e['source'] == 'utic'),
       kind: InsightKind.planAlert,
       planId: plan.id,
-      title: LocalizedText(ko: '$where 인근 $whatKo 통제', en: 'Road control near $where ($whatEn)'),
+      title: LocalizedText(ko: reference ? '$where 인근 교통 참고' : '$where 인근 $whatKo 통제', en: reference ? 'Traffic reference near $where' : 'Road control near $where ($whatEn)'),
       // 판별 로직 §12 "이동수단 미확인" 문구 — 지연·통행 불가를 단정하지 않는다.
       body: LocalizedText(
-        ko: '$whenKo 일정 장소 인근(약 $km km)에 도로 통제가 예고되어 있습니다. '
+        ko: reference ? '인근 교통 정보입니다. 종료 시각 또는 최신 통제 상태를 원문에서 확인해 주세요. 행사만으로 통제나 혼잡을 판단하지 않습니다.' : '$whenKo 일정 장소 인근(약 $km km)에 도로 통제가 예고되어 있습니다. '
             '이용하실 교통수단과 접근 경로에 영향이 있는지 확인해 주세요.',
-        en: 'A road control is announced about $km km from your plan $whenEn. '
+        en: reference ? 'Nearby traffic information. Check the source for the end time and current control status. An event alone does not establish road control or congestion.' : 'A road control is announced about $km km from your plan $whenEn. '
             'Check whether it affects how you plan to get there.',
       ),
       why: LocalizedText(
@@ -365,7 +376,11 @@ class InsightEngine {
         Signal(SignalType.traffic, LocalizedText(ko: periodKo, en: periodEn)),
         Signal(SignalType.event, LocalizedText(ko: n.title, en: n.title)),
       ],
-      sources: [SourceLink(n.sourceName, n.sourceUrl)],
+      sources: [
+        SourceLink(n.sourceName, safeTrafficUrl(n.sourceUrl) ? n.sourceUrl : n.source == 'utic' ? 'https://www.utic.go.kr/map/map.do?menu=incident' : null),
+        for (final e in n.evidenceRefs.where((e) => e['source'] != n.source))
+          SourceLink(e['sourceName'] as String? ?? e['source'] as String, safeTrafficUrl(e['sourceUrl'] as String?) ? e['sourceUrl'] as String : e['source'] == 'utic' ? 'https://www.utic.go.kr/map/map.do?menu=incident' : null),
+      ],
     );
   }
 

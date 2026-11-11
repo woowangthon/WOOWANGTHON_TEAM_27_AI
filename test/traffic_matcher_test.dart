@@ -35,6 +35,10 @@ TrafficNotice _notice({
       end: end,
       location: at,
       source: 'seoul-topis',
+      controlEvidence: 'confirmed',
+      evidenceText: '부분통제',
+      evidenceMethod: 'synthetic-v1',
+      timePrecision: 'minute',
       sourceName: '서울시 TOPIS · 실시간 돌발정보',
       sourceUrl: 'https://topis.seoul.go.kr',
     );
@@ -84,7 +88,7 @@ void main() {
   test('D14: 종료 미상 — 시작 날짜에만, 무기한 활성화하지 않음', () {
     final sameDay = m.evaluate(_plan(), _notice(start: DateTime(2026, 11, 8, 7)), _now);
     expect(sameDay.time, TimeMatch.possible);
-    expect(sameDay.decision, TrafficDecision.caution);
+    expect(sameDay.decision, TrafficDecision.reference);
     final dayBefore = m.evaluate(_plan(), _notice(start: DateTime(2026, 11, 7, 7)), _now);
     expect(dayBefore.decision, TrafficDecision.ignore);
   });
@@ -116,7 +120,7 @@ void main() {
     expect(card.sources.single.title, '서울시 TOPIS · 실시간 돌발정보');
   });
 
-  test('InsightEngine: 같은 도로의 여러 구간은 카드 하나, 일정당 최대 2개 (가까운 순)', () {
+  test('InsightEngine: 같은 제목의 서로 다른 구간을 보존, 일정당 최대 2개 (가까운 순)', () {
     TrafficNotice road(String id, String title, double lat) => TrafficNotice(
           id: id,
           kind: TrafficKind.construction,
@@ -141,6 +145,6 @@ void main() {
       ],
     );
     final ids = [for (final i in list) if (i.id.startsWith('traffic:')) i.id];
-    expect(ids, ['traffic:p1:a1', 'traffic:p1:b']);
+    expect(ids, ['traffic:p1:a1', 'traffic:p1:a2']); // 같은 제목만으로 서로 다른 구간을 숨기지 않는다
   });
 }

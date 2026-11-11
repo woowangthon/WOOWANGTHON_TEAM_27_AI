@@ -16,5 +16,6 @@ jobs:
       - run: dart pub get
       - run: dart analyze --fatal-infos
       - run: dart test
+      - run: dart run tool/verify_news_traffic.dart
       - name: dart test (Chrome — 웹 호환)
         run: dart test -p chrome

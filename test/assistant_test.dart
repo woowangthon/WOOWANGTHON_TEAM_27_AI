@@ -103,8 +103,14 @@ void main() {
       expect(find('콘서트'), isNot(contains('old')));
     });
 
-    test('종류가 없으면 종류 조건만 풀고 다른 조건은 지킨다', () {
-      expect(find('이번 주말 해커톤'), ['jazz-sat']);
+    test('조건에 맞는 종류가 없으면 무관한 행사로 대체하지 않는다', () {
+      expect(find('이번 주말 해커톤'), isEmpty);
+    });
+
+    test('일반 대화와 일치하지 않는 검색어에 추천을 반복하지 않는다', () {
+      expect(find('바보'), isEmpty);
+      expect(find('안녕하세요'), isEmpty);
+      expect(find('없는행사이름'), isEmpty);
     });
   });
 

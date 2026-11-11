@@ -40,7 +40,7 @@ abstract final class InsightWriter {
   ///   교통 영향을 덧붙이는 사례가 나왔다 (숫자 검증으로는 잡히지 않음). 그래서 제외한다.
   /// - `strike:` 뉴스 파업 참고 — 기사 인용을 그대로 보여준다.
   static bool isEligible(Insight insight) =>
-      !insight.id.startsWith('traffic:') && !insight.id.startsWith('crowd:') && !insight.id.startsWith('strike:');
+      !insight.id.startsWith('traffic:') && !insight.id.startsWith('crowd:') && !insight.id.startsWith('strike:') && !insight.id.startsWith('news-traffic:') && !insight.id.startsWith('travel:');
 
   static const systemInstruction =
       'You write the text of insight cards for LifeRadar, a lifestyle assistant for people living in Korea. '

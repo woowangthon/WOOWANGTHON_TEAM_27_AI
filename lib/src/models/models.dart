@@ -1,6 +1,8 @@
 /// LifeRadar 도메인 모델 — 앱(FE), 수집 파이프라인(BE), 엔진이 공유한다.
 library;
 
+import 'traffic.dart';
+
 class GeoPoint {
   const GeoPoint(this.lat, this.lng);
   final double lat;
@@ -148,6 +150,7 @@ class Plan {
     this.source = 'sample',
     this.note,
     this.htmlLink,
+    this.attendance = 'unknown',
   });
 
   final String id;
@@ -164,6 +167,8 @@ class Plan {
 
   /// Google 캘린더의 일정 페이지 ('gcal'만).
   final String? htmlLink;
+  /// 'onsite' | 'online' | 'unknown'; no address-based guessing.
+  final String attendance;
 
   /// 앱에서 수정/삭제 가능 여부 (캘린더 일정은 Google 캘린더에서 수정).
   bool get isEditable => source == 'local' || source == 'gcal';
@@ -184,6 +189,7 @@ class Plan {
     GeoPoint? Function()? location,
     String? source,
     String? Function()? note,
+    String? attendance,
   }) =>
       Plan(
         id: id ?? this.id,
@@ -196,6 +202,7 @@ class Plan {
         source: source ?? this.source,
         note: note == null ? this.note : note(),
         htmlLink: htmlLink,
+        attendance: attendance ?? this.attendance,
       );
 
   Map<String, dynamic> toJson() => {
@@ -209,6 +216,7 @@ class Plan {
         if (location != null) 'lng': location!.lng,
         'source': source,
         if (note != null) 'note': note,
+        'attendance': attendance,
       };
 
   static Plan fromJson(Map<String, dynamic> j) => Plan(
@@ -221,6 +229,7 @@ class Plan {
         location: j['lat'] == null ? null : GeoPoint((j['lat'] as num).toDouble(), (j['lng'] as num).toDouble()),
         source: j['source'] as String? ?? 'local',
         note: j['note'] as String?,
+        attendance: j['attendance'] as String? ?? 'unknown',
       );
 }
 
@@ -256,6 +265,9 @@ class Insight {
     this.sources = const [],
     this.feedback,
     this.aiModel,
+    this.notificationKey,
+    this.notificationEligible,
+    this.trafficContext,
   });
 
   final String id;
@@ -272,6 +284,9 @@ class Insight {
 
   /// [body]/[why]를 Gemini가 썼다면 모델 이름 (UI의 "AI" 표시). 사실은 여전히 규칙에서 온다.
   final String? aiModel;
+  final String? notificationKey;
+  final bool? notificationEligible;
+  final TrafficNotice? trafficContext;
 
   Insight copyWith({InsightFeedback? feedback, LocalizedText? body, LocalizedText? why, String? aiModel}) => Insight(
         id: id,
@@ -286,6 +301,9 @@ class Insight {
         sources: sources,
         feedback: feedback ?? this.feedback,
         aiModel: aiModel ?? this.aiModel,
+        notificationKey: notificationKey,
+        notificationEligible: notificationEligible,
+        trafficContext: trafficContext,
       );
 }
 
@@ -307,6 +325,8 @@ class TravelRoute {
     this.points = const [],
     this.mode = TravelMode.car,
     this.transitLines = const [],
+    this.transportModes = const {},
+    this.facilityIds = const {},
   });
   final int distanceMeters;
   final int durationSeconds;
@@ -315,6 +335,9 @@ class TravelRoute {
 
   /// 예: ["KTX 경부"] — 대중교통만.
   final List<String> transitLines;
+  /// Provider vehicle types; an empty set is unknown for old saved routes.
+  final Set<String> transportModes;
+  final Set<String> facilityIds;
 }
 
 /// 경로 주변 기회: 행사 + 경로에서의 거리 + 추가 이동.

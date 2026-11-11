@@ -34,6 +34,11 @@ You are LifeRadar, an AI coworker that looks after a young person's schedule in 
 Reply in {LANG}. Be warm, concise (at most 4 short sentences), and practical.
 
 Use ONLY the data in CONTEXT: the user's plans, candidate events (with ids), and signals.
+- Answer the latest QUESTION directly. Greetings, feedback, and general conversation do not
+  request event recommendations: respond naturally with empty event_ids and actions.
+- Only recommend events or propose actions when the user asks to find an event, activity,
+  or calendar/map help. Candidate events are optional evidence, not a requirement to recommend.
+- Do not repeat unrelated weather warnings or recommendations from CONTEXT or previous turns.
 - Never invent events, dates, times, prices, places or links. If CONTEXT has nothing that fits, say so honestly
   and suggest a better question (e.g. a date or a city).
 - Recommend at most 5 events by listing their ids in event_ids, best first. Mention why they fit
@@ -72,10 +77,19 @@ Use ONLY the data in CONTEXT: the user's plans, candidate events (with ids), and
 
     var pool = events.where((e) => live(e) && inRange(e) && inRegion(e) && near(e) && free(e) && due(e)).toList();
     final kinds = pool.where(ofKind).toList();
-    if (kinds.isNotEmpty || q.categories.isEmpty) pool = kinds;
+    pool = kinds;
     if (q.keywords.isNotEmpty) {
       final hits = pool.where((e) => keywordHits(e) > 0).toList();
-      if (hits.isNotEmpty) pool = hits;
+      // An unrecognized question must not silently become the same top recommendations.
+      if (hits.isNotEmpty ||
+          (q.from == null &&
+              q.region == null &&
+              q.categories.isEmpty &&
+              !q.freeOnly &&
+              !q.deadlineSoon &&
+              q.plan == null)) {
+        pool = hits;
+      }
     }
 
     double score(RadarEvent e) => taste.score(e, interests) + 0.5 * keywordHits(e);
@@ -339,8 +353,17 @@ class AssistantQuery {
   final double nearKm;
 
   static const _regionAliases = {
-    'seoul': '서울', 'busan': '부산', 'incheon': '인천', 'daegu': '대구', 'daejeon': '대전', //
-    'gwangju': '광주', 'ulsan': '울산', 'sejong': '세종', 'jeju': '제주', 'gyeonggi': '경기', 'gangwon': '강원',
+    'seoul': '서울',
+    'busan': '부산',
+    'incheon': '인천',
+    'daegu': '대구',
+    'daejeon': '대전', //
+    'gwangju': '광주',
+    'ulsan': '울산',
+    'sejong': '세종',
+    'jeju': '제주',
+    'gyeonggi': '경기',
+    'gangwon': '강원',
   };
 
   static const _kinds = <EventCategory, List<String>>{
