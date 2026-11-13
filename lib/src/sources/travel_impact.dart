@@ -188,8 +188,9 @@ class TravelImpactService {
             j = await _getFeed('traffic.json', now, force);
           }
           final updated = DateTime.tryParse('${j['generatedAt']}');
-          if (j['notices'] is! List || !_fresh(updated, now, const Duration(hours: 24)))
+          if (j['notices'] is! List || !_fresh(updated, now, const Duration(hours: 24))) {
             throw StateError('stale or invalid');
+          }
           for (final row in j['notices'] as List) {
             final raw = (row as Map).cast<String, dynamic>();
             final legacyTopis = raw['source'] == 'seoul-topis' && j['schemaVersion'] != 2;
@@ -217,7 +218,7 @@ class TravelImpactService {
           final rows = ItsTraffic.rows(j);
           final parsed = [
             for (final row in rows)
-              if (ItsTraffic.parse(row) case final n?) n,
+              ?ItsTraffic.parse(row),
           ];
           notices.addAll(parsed);
           final complete = ItsTraffic.isComplete(j);
@@ -237,8 +238,9 @@ class TravelImpactService {
         try {
           final j = await _getFeed('news.json', now, force);
           final updated = DateTime.tryParse('${j['generatedAt']}');
-          if (j['strikes'] is! List || !_fresh(updated, now, const Duration(hours: 24)))
+          if (j['strikes'] is! List || !_fresh(updated, now, const Duration(hours: 24))) {
             throw StateError('stale or invalid');
+          }
           for (final row in j['strikes'] as List) {
             final s = TransitStrike.fromJson((row as Map).cast<String, dynamic>());
             if (s.quote.trim().isNotEmpty && _url(s.url)) strikes.add(s);
@@ -270,8 +272,9 @@ class TravelImpactService {
         try {
           final j = await _getFeed('events.json', now, force);
           eventUpdated = DateTime.tryParse('${j['generatedAt']}');
-          if (j['events'] is! List || !_fresh(eventUpdated, now, const Duration(hours: 72)))
+          if (j['events'] is! List || !_fresh(eventUpdated, now, const Duration(hours: 72))) {
             throw StateError('stale or invalid');
+          }
           for (final row in j['events'] as List) {
             final e = RadarEvent.fromJson((row as Map).cast<String, dynamic>());
             if (!e.isSample && !e.placeless && _url(e.url ?? e.registerUrl)) events.add(e);
@@ -388,7 +391,7 @@ class TravelImpactService {
           interests: {},
           now: now,
           traffic: notices,
-          tripsByPlanId: {if (trafficTrip != null) plan.id: trafficTrip},
+          tripsByPlanId: {plan.id: ?trafficTrip},
         ),
       );
       for (final impact in verified) {
@@ -398,8 +401,9 @@ class TravelImpactService {
       _addStrikes(plan, trafficTrip, strikes, insights);
       _addEvents(plan, trafficTrip, events, insights);
       for (final (notice, restrictionMode) in transitNotices) {
-        if (trafficTrip != null && trafficTrip.modes.isNotEmpty && !trafficTrip.modes.contains(restrictionMode))
+        if (trafficTrip != null && trafficTrip.modes.isNotEmpty && !trafficTrip.modes.contains(restrictionMode)) {
           continue;
+        }
         final lo = trafficTrip?.departure ?? plan.start.subtract(const Duration(hours: 2));
         final hi = trafficTrip?.arrival ?? plan.start;
         final end = notice.end;
@@ -446,8 +450,9 @@ class TravelImpactService {
   void _addStrikes(Plan plan, TripContext? trip, List<TransitStrike> strikes, List<Insight> out) {
     for (final s in strikes) {
       if (!s.isActive || plan.location == null || !KoreaRegions.covers(s.regions, plan.location!)) continue;
-      if (trip != null && trip.modes.isNotEmpty && s.mode != TransitMode.unknown && !trip.modes.contains(s.mode.name))
+      if (trip != null && trip.modes.isNotEmpty && s.mode != TransitMode.unknown && !trip.modes.contains(s.mode.name)) {
         continue;
+      }
       final start = s.start ?? (s.status == StrikeStatus.ongoing ? s.publishedAt : null);
       if (start == null) continue;
       final day = DateTime(plan.start.year, plan.start.month, plan.start.day);

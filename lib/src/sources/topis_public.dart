@@ -33,8 +33,9 @@ class TopisPublic {
         !y.isFinite ||
         start == null ||
         updated == null ||
-        trafficUtc(now).difference(updated).abs() > const Duration(minutes: 15))
+        trafficUtc(now).difference(updated).abs() > const Duration(minutes: 15)) {
       return null;
+    }
     final at = tmToWgs84(x.toDouble(), y.toDouble());
     if (at.lat < 33 || at.lat > 39 || at.lng < 124 || at.lng > 132) return null;
     final detail = '${row['accInfo'] ?? ''}'.replaceAll(r'\r', '').replaceAll(r'\n', '\n').replaceAll('\r', '').trim();
