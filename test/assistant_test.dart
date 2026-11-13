@@ -57,6 +57,20 @@ final _events = [
 ];
 
 void main() {
+  test('Generic deadline notices include contests without narrowing to startup support', () {
+    final query = AssistantQuery.parse('마감 임박한 공고 알려줘', now: _now);
+    final contest = RadarEvent.fromJson({
+      ..._events.firstWhere((e) => e.id == 'kstartup').toJson(),
+      'id': 'contest-deadline',
+      'category': 'contest',
+      'applicationStatus': 'open',
+      'lastVerifiedAt': _now.toIso8601String(),
+    });
+    final results = Assistant.retrieve(query, events: [contest], interests: const {}, now: _now);
+    expect(results.map((e) => e.id), contains('contest-deadline'));
+    expect(AssistantQuery.parse('창업 공고 알려줘', now: _now).categories, contains(EventCategory.startupSupport));
+  });
+
   group('질문 읽기 (코드)', () {
     test('이번 주말 · 무료 · 콘서트', () {
       final q = AssistantQuery.parse('이번 주말 무료 콘서트 있어?', now: _now);

@@ -387,7 +387,7 @@ class AssistantQuery {
     EventCategory.job: ['채용', '취업', '일자리', 'job', 'hiring', 'career'],
     EventCategory.scholarship: ['장학', 'scholarship'],
     EventCategory.classes: ['강좌', '클래스', '교육', '체험', '수업', 'class', 'workshop', 'course'],
-    EventCategory.startupSupport: ['창업', '지원사업', '공고', 'startup', 'founder'],
+    EventCategory.startupSupport: ['창업', '지원사업', 'startup', 'founder'],
   };
 
   static const _stop = {
