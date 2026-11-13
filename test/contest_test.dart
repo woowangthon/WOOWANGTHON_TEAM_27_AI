@@ -24,6 +24,22 @@ RadarEvent contest({String audience = 'general', String status = 'open', DateTim
   audience: audience,
 );
 void main() {
+  test('weekly verification allows seven days plus one retry day; legacy remains 48h', () {
+    final weekly = RadarEvent.fromJson({...contest().toJson(), 'verificationTtlHours': 192});
+    expect(weekly.applicationStale(now.add(const Duration(days: 7))), isFalse);
+    expect(weekly.applicationStale(now.add(const Duration(hours: 193))), isTrue);
+    expect(contest().applicationStale(now.add(const Duration(hours: 49))), isTrue);
+    expect(weekly.copyWith(tags: ['contest']).verificationTtlHours, 192);
+  });
+  test('onsite contest keeps reception status independent of venue dates', () {
+    final e = RadarEvent.fromJson({...contest().toJson(),
+      'placeless': false, 'applicationStart': '2026-11-10',
+      'start': '2026-12-07', 'end': '2026-12-07', 'eventDatePrecision': 'date'});
+    expect(e.applicationStatusAt(now), 'open');
+    expect(RadarEvent.fromJson(e.toJson()).applicationStart, DateTime(2026, 11, 10));
+    expect(e.copyWith(tags: ['ai']).eventDatePrecision, 'date');
+    expect(RadarEvent.fromJson({...e.toJson(), 'category': 'hackathon'}).isApplication, isTrue);
+  });
   test('contest serialization, copy and optional backward compatibility', () {
     final e = contest();
     expect(RadarEvent.fromJson(e.toJson()).toJson(), e.toJson());

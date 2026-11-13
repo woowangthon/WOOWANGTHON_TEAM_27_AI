@@ -61,6 +61,9 @@ class RadarEvent {
     this.audience,
     this.regionText,
     this.participationMode,
+    this.applicationStart,
+    this.eventDatePrecision,
+    this.verificationTtlHours = 48,
 
   });
 
@@ -99,9 +102,15 @@ class RadarEvent {
   final String? audience;
   final String? regionText;
   final String? participationMode;
+  /// Reception start, separate from onsite [start]. Legacy notices use [start].
+  final DateTime? applicationStart;
+  /// 'date' means no onsite time has been announced. Do not display midnight.
+  final String? eventDatePrecision;
+  /// Weekly collectors allow seven days plus a one-day retry window.
+  final int verificationTtlHours;
 
   bool get isApplication => category == EventCategory.contest || source == 'sotong-contest' ||
-      (category == EventCategory.hackathon && placeless && applicationStatus != null);
+      (category == EventCategory.hackathon && applicationStatus != null);
   bool get isSample => source == 'sample';
 
   /// Date-only application values are civil KST dates (stored without a timezone).
@@ -119,7 +128,7 @@ class RadarEvent {
           d.toUtc().hour, d.toUtc().minute).add(const Duration(hours: 9));
 
   bool applicationStale(DateTime now) => isApplication &&
-      (lastVerifiedAt == null || now.toUtc().difference(lastVerifiedAt!.toUtc()) > const Duration(hours: 48));
+      (lastVerifiedAt == null || now.toUtc().difference(lastVerifiedAt!.toUtc()) > Duration(hours: verificationTtlHours));
 
   bool applicationVisible(DateTime now) => !isApplication ||
       (applicationStatus != 'cancelled' && applicationStatus != 'closed' &&
@@ -130,7 +139,8 @@ class RadarEvent {
     if (applicationStatus == 'cancelled') return 'cancelled';
     if (!applicationVisible(now)) return 'closed';
     if (applicationStale(now)) return 'unknown';
-    final begin = start.isUtc ? start : DateTime.utc(start.year, start.month, start.day).subtract(const Duration(hours: 9));
+    final reception = applicationStart ?? start;
+    final begin = reception.isUtc ? reception : DateTime.utc(reception.year, reception.month, reception.day).subtract(const Duration(hours: 9));
     return now.toUtc().isBefore(begin) ? 'upcoming' : 'open';
   }
 
@@ -184,6 +194,9 @@ class RadarEvent {
         if (audience != null) 'audience': audience,
         if (regionText != null) 'regionText': regionText,
         if (participationMode != null) 'participationMode': participationMode,
+        if (applicationStart != null) 'applicationStart': applicationStart!.toIso8601String(),
+        if (eventDatePrecision != null) 'eventDatePrecision': eventDatePrecision,
+        if (verificationTtlHours != 48) 'verificationTtlHours': verificationTtlHours,
       };
 
   static RadarEvent fromJson(Map<String, dynamic> j) {
@@ -220,6 +233,9 @@ class RadarEvent {
       audience: j['audience'] as String?,
       regionText: j['regionText'] as String?,
       participationMode: j['participationMode'] as String?,
+      applicationStart: DateTime.tryParse(j['applicationStart'] as String? ?? ''),
+      eventDatePrecision: j['eventDatePrecision'] as String?,
+      verificationTtlHours: ((j['verificationTtlHours'] as num?)?.toInt() ?? 48).clamp(1, 192),
     );
   }
 }

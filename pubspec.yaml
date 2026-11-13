@@ -8,6 +8,7 @@ environment:
   sdk: ^3.11.0
 
 dependencies:
+  html: ^0.15.6
   http: ^1.6.0
 
 dev_dependencies:

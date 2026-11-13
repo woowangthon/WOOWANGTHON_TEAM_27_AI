@@ -1,5 +1,7 @@
 # LifeRadar AI — 판단 엔진과 AI 모듈
 
+> 2026-11-13 추가: 공개 공모전 수집 모듈 `PublicContestParser`·`PublicContestCollector`·`KakaoContestGeocoder`를 추가했습니다. 앱의 주간 수집에서 사용하는 공통 Dart 코드이며 세 사이트의 공개 데이터 형식과 현장 세션을 검증합니다. 실행 확인은 `tool/eval_public_contests.dart`, 회귀 검증은 `test/public_contests_test.dart`를 참고하세요. 유료 AI 모델 호출 없이 동작합니다.
+
 > **WOOWANGTHON TEAM 27** · 2026 AI 우왕톤 · 주제 *"AI는 동료가 될 수 있을까?"*
 >
 > 저장소: [FE (Flutter 앱)](https://github.com/woowangthon/WOOWANGTHON_TEAM_27_FE) · [BE (데이터 파이프라인)](https://github.com/woowangthon/WOOWANGTHON_TEAM_27_BE) · **AI (이 저장소)**

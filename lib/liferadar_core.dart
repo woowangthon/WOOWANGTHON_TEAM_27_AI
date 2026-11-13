@@ -26,6 +26,7 @@ export 'src/models/transit_strike.dart';
 export 'src/models/news_traffic.dart';
 export 'src/sources/its_traffic.dart';
 export 'src/sources/travel_impact.dart';
+export 'src/sources/public_contests.dart';
 
 export 'src/models/traffic_time.dart';
 export 'src/engine/traffic_merger.dart';
