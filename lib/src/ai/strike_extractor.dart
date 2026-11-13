@@ -11,6 +11,7 @@ library;
 import 'dart:convert';
 
 import '../models/transit_strike.dart';
+import '../models/domestic_news.dart';
 import 'insight_writer.dart';
 
 /// 검색 API로 받은 기사 (본문 전체가 아니라 제목 + 요약).
@@ -176,6 +177,10 @@ date_quote: EXACT phrase containing the start date; "" if no date.
       void reject(String why) => rejected?[article.id] = why;
       if (item['related'] != true) {
         reject('unrelated');
+        continue;
+      }
+      if (!DomesticNews.accepts(article.text)) {
+        reject('domestic transport subject not established');
         continue;
       }
       final status = StrikeStatus.values.asNameMap()[item['status']] ?? StrikeStatus.unknown;

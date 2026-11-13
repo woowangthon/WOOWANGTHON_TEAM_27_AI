@@ -13,7 +13,7 @@ import '../models/models.dart';
 /// 허용 태그 (앱의 관심사 목록과 동일). 모델은 이 중에서만 고른다.
 const allowedTags = [
   'ai', 'developer', 'data', 'startup', 'design', //
-  'career', 'student', 'networking', 'finance', 'language', 'books',
+  'contest', 'career', 'student', 'networking', 'finance', 'language', 'books',
   'music', 'culture', 'art', 'movie', 'photo', 'gaming',
   'sports', 'fitness', 'outdoor', 'travel',
   'food', 'family', 'pets', 'fashion', 'volunteer',
@@ -150,6 +150,7 @@ class AiEnrich {
         EventCategory.concert => 'music',
         EventCategory.exhibition => 'art',
         EventCategory.festival || EventCategory.performance => 'culture',
+        EventCategory.contest => 'contest',
         EventCategory.startupSupport => 'startup',
         EventCategory.hackathon => 'developer',
         EventCategory.job => 'career',

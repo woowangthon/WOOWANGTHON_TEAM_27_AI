@@ -398,8 +398,8 @@ class TravelImpactService {
         final evaluation = const NewsTrafficMatcher().evaluate(plan, trafficTrip, impact, now);
         if (evaluation.visible) insights.add(evaluation.toInsight());
       }
-      _addStrikes(plan, trafficTrip, strikes, insights);
-      _addEvents(plan, trafficTrip, events, insights);
+      // Legacy snippets and event listings do not establish a personal impact.
+      // Only full-body verified impacts above can produce news alerts.
       for (final (notice, restrictionMode) in transitNotices) {
         if (trafficTrip != null && trafficTrip.modes.isNotEmpty && !trafficTrip.modes.contains(restrictionMode)) {
           continue;
@@ -445,92 +445,6 @@ class TravelImpactService {
       scheduleVersion: TravelImpactReport.versionOf(plan),
       tripVersion: trip?.version,
     );
-  }
-
-  void _addStrikes(Plan plan, TripContext? trip, List<TransitStrike> strikes, List<Insight> out) {
-    for (final s in strikes) {
-      if (!s.isActive || plan.location == null || !KoreaRegions.covers(s.regions, plan.location!)) continue;
-      if (trip != null && trip.modes.isNotEmpty && s.mode != TransitMode.unknown && !trip.modes.contains(s.mode.name)) {
-        continue;
-      }
-      final start = s.start ?? (s.status == StrikeStatus.ongoing ? s.publishedAt : null);
-      if (start == null) continue;
-      final day = DateTime(plan.start.year, plan.start.month, plan.start.day);
-      final first = DateTime(start.year, start.month, start.day);
-      final indefinite = RegExp('무기한|until further notice', caseSensitive: false).hasMatch(s.quote);
-      final end = s.end == null
-          ? (indefinite ? null : first.add(const Duration(days: 1)))
-          : DateTime(s.end!.year, s.end!.month, s.end!.day + 1);
-      if (day.isBefore(first) || (end != null && !day.isBefore(end))) continue;
-      out.add(
-        Insight(
-          id: 'travel:strike:${plan.id}:${s.id}',
-          planId: plan.id,
-          kind: InsightKind.planAlert,
-          notificationEligible: true,
-          notificationKey: 'travel:strike:${plan.id}:${plan.start.toIso8601String()}:${s.id}:${s.status.name}',
-          title: LocalizedText(
-            ko: '${s.operator} 파업에 따른 이용 제한 가능성',
-            en: 'Possible disruption from ${s.operator} strike',
-          ),
-          body: LocalizedText(
-            ko:
-                '${s.status == StrikeStatus.conditional
-                    ? '조건부 예고'
-                    : s.status == StrikeStatus.ongoing
-                    ? '파업 진행 보도'
-                    : '파업 예고'}가 일정 날짜·지역${trip == null ? '' : '·이동수단'}와 겹칩니다. 전체 운행 중단 여부는 확인되지 않았습니다. 이용 노선의 운행 공지를 확인해 주세요.',
-            en: 'A reported strike overlaps your travel date and region. This does not establish a complete service suspension.',
-          ),
-          why: LocalizedText(ko: '보도 인용: “${s.quote}”', en: 'Reported evidence: “${s.quote}”'),
-          confidence: 0.55,
-          sources: [SourceLink(s.articleTitle, s.url)],
-        ),
-      );
-    }
-  }
-
-  void _addEvents(Plan plan, TripContext? trip, List<RadarEvent> events, List<Insight> out) {
-    final day = DateTime(plan.start.year, plan.start.month, plan.start.day);
-    final hits = <(RadarEvent, double)>[];
-    for (final e in events) {
-      if (e.category != EventCategory.festival && !RegExp('마라톤|행진|집회').hasMatch(e.title.ko)) continue;
-      if (e.end.isBefore(day) || !e.start.isBefore(day.add(const Duration(days: 1)))) continue;
-      final km = trip != null && trip.points.length > 1
-          ? RouteMatcher.distanceToPolylineKm(e.location, trip.points)
-          : plan.location == null
-          ? double.infinity
-          : RouteMatcher.haversineKm(e.location, plan.location!);
-      if (km <= (trip == null ? 3 : 1)) hits.add((e, km));
-    }
-    hits.sort((a, b) => a.$2.compareTo(b.$2));
-    for (final (e, km) in hits.take(3)) {
-      out.add(
-        Insight(
-          id: 'travel:event:${plan.id}:${e.id}',
-          kind: InsightKind.planAlert,
-          planId: plan.id,
-          eventIds: [e.id],
-          notificationEligible: true,
-          notificationKey:
-              'travel:event:${plan.id}:${plan.start.toIso8601String()}:${e.id}:${e.start.toIso8601String()}',
-          title: LocalizedText(
-            ko: '${trip == null ? '일정 장소' : '이동 경로'} 주변 행사 · 혼잡 가능성',
-            en: 'Nearby event: possible traffic impact',
-          ),
-          body: LocalizedText(
-            ko: '같은 날 약 ${km.toStringAsFixed(1)} km 거리에서 “${e.title.ko}” 행사가 열립니다. 방문객 이동에 따른 혼잡 가능성을 확인하세요. 통제·교통 마비·운행 중단이 확인된 것은 아닙니다.',
-            en: '“${e.title.en}” takes place about ${km.toStringAsFixed(1)} km away that day. Congestion is possible; no road closure or service suspension is established.',
-          ),
-          why: const LocalizedText(
-            ko: '실제 공공 행사 일정의 날짜와 장소를 비교한 가능성 안내입니다. 실시간 혼잡 관측과 구분합니다.',
-            en: 'Based on real event dates and proximity, distinct from observed congestion.',
-          ),
-          confidence: 0.45,
-          sources: [SourceLink(e.sourceName ?? e.source, e.url ?? e.registerUrl)],
-        ),
-      );
-    }
   }
 
   Future<(TravelRoute, double, double, List<String>, double)> _driving(GeoPoint a, GeoPoint b, DateTime now) async {

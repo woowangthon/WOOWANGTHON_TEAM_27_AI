@@ -59,19 +59,21 @@ Use ONLY the data in CONTEXT: the user's plans, candidate events (with ids), and
     int limit = maxCandidates,
   }) {
     final today = DateTime(now.year, now.month, now.day);
-    bool live(RadarEvent e) => !e.end.isBefore(today);
+    final universityRequested = q.keywords.any((k)=>RegExp(r'대학|university|college|student',caseSensitive:false).hasMatch(k));
+    bool live(RadarEvent e) => e.applicationVisible(now) && !e.end.isBefore(today) &&
+        !((taste.stage == LifeStage.student || universityRequested) && e.isApplication && e.audience != 'general' && e.audience != 'university');
     bool inRange(RadarEvent e) => q.from == null || (e.start.isBefore(q.to!) && !e.end.isBefore(q.from!));
     bool inRegion(RadarEvent e) =>
-        q.region == null || (e.placeless ? false : KoreaRegions.covers([q.region!], e.location));
+        q.region == null || (e.placeless ? e.city == '전국' || (e.regionText ?? e.city).contains(q.region!) : KoreaRegions.covers([q.region!], e.location));
     bool ofKind(RadarEvent e) => q.categories.isEmpty || q.categories.contains(e.category);
     bool free(RadarEvent e) => !q.freeOnly || e.isFree == true;
     bool due(RadarEvent e) =>
         !q.deadlineSoon ||
-        (e.deadline != null && !e.deadline!.isBefore(today) && e.deadline!.difference(today).inDays <= 14);
+        (e.applicationActionable(now) && e.deadline != null && !e.deadline!.isBefore(today) && e.deadline!.difference(today).inDays <= 14);
     bool near(RadarEvent e) =>
         q.near == null || (!e.placeless && RouteMatcher.haversineKm(q.near!, e.location) <= q.nearKm);
     int keywordHits(RadarEvent e) {
-      final hay = '${e.title.ko} ${e.title.en} ${e.venue} ${e.city}'.toLowerCase();
+      final hay = '${e.title.ko} ${e.title.en} ${e.venue} ${e.city} ${e.eligibilityText ?? ''}'.toLowerCase();
       return q.keywords.where(hay.contains).length;
     }
 
@@ -145,11 +147,18 @@ Use ONLY the data in CONTEXT: the user's plans, candidate events (with ids), and
             if (e.title.en != e.title.ko) 'title_en': e.title.en,
             'category': e.category.name,
             'tags': e.tags,
-            'date': _sameDay(e.start, e.end) ? '${ymd(e.start)} ${hm(e.start)}' : '${ymd(e.start)} ~ ${ymd(e.end)}',
+            'date': e.isApplication ? '${ymd(e.applicationDate(e.start))} ~ ${ymd(e.applicationDate(e.end))}' : _sameDay(e.start, e.end) ? '${ymd(e.start)} ${hm(e.start)}' : '${ymd(e.start)} ~ ${ymd(e.end)}',
             if (!e.placeless) 'place': '${e.venue}, ${e.city}' else 'organizer': e.venue,
             if (e.isFree == true) 'free': true,
             if (e.price != null && e.isFree != true) 'price': e.price,
-            if (e.deadline != null) 'deadline': ymd(e.deadline!),
+            if (e.deadline != null) 'deadline': ymd(e.isApplication ? e.applicationDate(e.deadline!) : e.deadline!),
+            if (e.isApplication) ...{
+              'dateMeaning': 'application period, not event dates',
+              'eligibility': e.eligibilityText,
+              'eligibilityConfirmedForUser': false,
+              'applicationStatus': e.applicationStale(now) ? 'unknown (verification delayed)' : e.applicationStatusAt(now),
+              'deadlinePrecision': e.deadlinePrecision,
+            },
           },
       ],
     };
@@ -371,6 +380,7 @@ class AssistantQuery {
     EventCategory.performance: ['연극', '뮤지컬', '무용', 'musical', 'theater', 'theatre', 'play'],
     EventCategory.exhibition: ['전시', '미술', '박물관', 'exhibition', 'museum', 'art'],
     EventCategory.festival: ['축제', 'festival'],
+    EventCategory.contest: ['공모전', '공모', 'contest', 'competition'],
     EventCategory.hackathon: ['해커톤', 'hackathon'],
     EventCategory.conference: ['컨퍼런스', '세미나', '포럼', 'conference', 'seminar', 'forum'],
     EventCategory.meetup: ['밋업', '모임', '네트워킹', 'meetup', 'networking'],

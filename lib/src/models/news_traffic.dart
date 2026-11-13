@@ -1,4 +1,5 @@
 import 'models.dart';
+import 'domestic_news.dart';
 
 /// Trusted, versioned public transport reference supplied by the backend.
 /// Route names from providers are only mapped with region + mode + validity.
@@ -129,6 +130,35 @@ class NewsTrafficImpact {
   String get sourceUrl => _json['source_url'] as String;
   bool get conflict => _json['conflict'] == true;
   bool get demo => _json['demo'] == true;
+  bool get domestic => DomesticNews.accepts(
+    '$name ${evidence.map((e) => e['quote']).join(' ')}',
+  );
+  bool get hasTransportEvidence => evidence.any((e) {
+    final quote = e['quote'] as String;
+    if (RegExp(r'혼잡.*(?:없|않|아니)|통제.*(?:없|하지 않)|정상 통행').hasMatch(quote)) {
+      return false;
+    }
+    return switch (type) {
+      'STRIKE' => quote.contains('파업'),
+      'CONGESTION_FORECAST' =>
+        RegExp(r'(?:교통|차량|보행).*혼잡.*(?:예상|전망)').hasMatch(quote),
+      'ROAD_CLOSURE' => RegExp(r'(?:도로|차량|대로|구간).*통제').hasMatch(quote),
+      'BUS_DETOUR' => RegExp(r'버스.*우회').hasMatch(quote),
+      'STOP_SKIP' => quote.contains('무정차'),
+      'STATION_RESTRICTION' => RegExp(r'출입구.*폐쇄|역.*이용 제한').hasMatch(quote),
+      _ => false,
+    };
+  });
+  // The radius must be supplied by a trusted geographic reference for the
+  // affected scope. An event coordinate alone is not an impact area.
+  double? get verifiedRadiusKm {
+    final radius = _json['affected_radius_m'];
+    return radius is num && radius.isFinite && radius > 0 &&
+            _json['area_reference_source'] is String &&
+            (_json['area_reference_source'] as String).isNotEmpty
+        ? radius.toDouble() / 1000
+        : null;
+  }
   Map<String, dynamic> get period =>
       (_json['period'] as Map).cast<String, dynamic>();
   List<Map<String, dynamic>> get scope => maps(_json['scope']);

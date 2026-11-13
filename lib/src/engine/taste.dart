@@ -74,6 +74,7 @@ class Taste {
   /// 관심사 적합도 (0..1) + 취향. 관심사에 전혀 맞지 않으면 0으로 남아 취향이 새로운
   /// 주제를 추가하지 않고 순서만 변경함. 평가된 event 자체는 자동으로 이동하지 않음.
   double score(RadarEvent e, Set<String> interests) {
+    if (stage == LifeStage.student && e.isApplication && e.audience != 'general' && e.audience != 'university') return 0;
     final fitsStage = stage?.fits(e) ?? false;
     final interest = e.tags.isEmpty ? 0.0 : e.tags.where(interests.contains).length / e.tags.length;
     if (interest == 0) return fitsStage && !rated.contains(e.id) ? _stageOnly : 0;

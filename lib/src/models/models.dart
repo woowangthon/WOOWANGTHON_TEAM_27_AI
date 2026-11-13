@@ -30,6 +30,7 @@ enum EventCategory {
   exhibition,
   classes, // 교육 / 체험
   startupSupport, // 창업 지원 공고 (K-Startup)
+  contest,
 }
 
 class RadarEvent {
@@ -53,6 +54,14 @@ class RadarEvent {
     this.isFree,
     this.price,
     this.placeless = false,
+    this.applicationStatus,
+    this.deadlinePrecision,
+    this.lastVerifiedAt,
+    this.eligibilityText,
+    this.audience,
+    this.regionText,
+    this.participationMode,
+
   });
 
   final String id;
@@ -72,7 +81,7 @@ class RadarEvent {
   /// 'sample' 또는 데이터 출처 키 (예: 'seoul-culture').
   final String source;
 
-  /// 사용자에게 보여줄 출처 이름 (공공누리 라이선스 요구 사항 — 출처 표시).
+  /// 사용자에게 보여줄 출처 이름 (출처별 이용 조건은 별도 확인).
   final String? sourceName;
   final String? imageUrl;
   final bool? isFree;
@@ -82,7 +91,70 @@ class RadarEvent {
   /// 지도, 경로, "근처" 카드에는 나오지 않는다; [start]–[end] = 접수 기간.
   final bool placeless;
 
+  /// Optional application metadata; absent for legacy feeds.
+  final String? applicationStatus;
+  final String? deadlinePrecision;
+  final DateTime? lastVerifiedAt;
+  final String? eligibilityText;
+  final String? audience;
+  final String? regionText;
+  final String? participationMode;
+
+  bool get isApplication => category == EventCategory.contest || source == 'sotong-contest' ||
+      (category == EventCategory.hackathon && placeless && applicationStatus != null);
   bool get isSample => source == 'sample';
+
+  /// Date-only application values are civil KST dates (stored without a timezone).
+  /// Datetime values are instants. A date deadline expires at next KST midnight.
+  DateTime get deadlineBoundary {
+    final d = deadline ?? end;
+    return deadlinePrecision == 'date'
+        ? DateTime.utc(d.year, d.month, d.day + 1).subtract(const Duration(hours: 9))
+        : d.toUtc();
+  }
+
+  DateTime applicationDate(DateTime d) => !d.isUtc
+      ? DateTime(d.year, d.month, d.day)
+      : DateTime.utc(d.toUtc().year, d.toUtc().month, d.toUtc().day,
+          d.toUtc().hour, d.toUtc().minute).add(const Duration(hours: 9));
+
+  bool applicationStale(DateTime now) => isApplication &&
+      (lastVerifiedAt == null || now.toUtc().difference(lastVerifiedAt!.toUtc()) > const Duration(hours: 48));
+
+  bool applicationVisible(DateTime now) => !isApplication ||
+      (applicationStatus != 'cancelled' && applicationStatus != 'closed' &&
+       now.toUtc().isBefore(deadlineBoundary));
+
+  String? applicationStatusAt(DateTime now) {
+    if (!isApplication) return applicationStatus;
+    if (applicationStatus == 'cancelled') return 'cancelled';
+    if (!applicationVisible(now)) return 'closed';
+    if (applicationStale(now)) return 'unknown';
+    final begin = start.isUtc ? start : DateTime.utc(start.year, start.month, start.day).subtract(const Duration(hours: 9));
+    return now.toUtc().isBefore(begin) ? 'upcoming' : 'open';
+  }
+
+  bool applicationActionable(DateTime now) => !isApplication ||
+      (!applicationStale(now) && applicationVisible(now) &&
+       (applicationStatusAt(now) == 'open' || applicationStatusAt(now) == 'upcoming'));
+
+  RadarEvent copyWith({LocalizedText? title, LocalizedText? description, List<String>? tags,
+    String? Function()? applicationStatus, String? Function()? deadlinePrecision,
+    DateTime? Function()? lastVerifiedAt, String? Function()? eligibilityText,
+    String? Function()? audience, String? Function()? regionText, String? Function()? participationMode,
+  }) =>
+      RadarEvent.fromJson({...toJson(),
+        if (title != null) 'title': {'ko': title.ko, 'en': title.en},
+        if (description != null) 'description': {'ko': description.ko, 'en': description.en},
+        'tags': ?tags,
+        if(applicationStatus != null) 'applicationStatus':applicationStatus(),
+        if(deadlinePrecision != null) 'deadlinePrecision':deadlinePrecision(),
+        if(lastVerifiedAt != null) 'lastVerifiedAt':lastVerifiedAt()?.toUtc().toIso8601String(),
+        if(eligibilityText != null) 'eligibilityText':eligibilityText(),
+        if(audience != null) 'audience':audience(),
+        if(regionText != null) 'regionText':regionText(),
+        if(participationMode != null) 'participationMode':participationMode(),
+      });
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -105,6 +177,13 @@ class RadarEvent {
         if (isFree != null) 'isFree': isFree,
         if (price != null) 'price': price,
         if (placeless) 'placeless': true,
+        if (applicationStatus != null) 'applicationStatus': applicationStatus,
+        if (deadlinePrecision != null) 'deadlinePrecision': deadlinePrecision,
+        if (lastVerifiedAt != null) 'lastVerifiedAt': lastVerifiedAt!.toUtc().toIso8601String(),
+        if (eligibilityText != null) 'eligibilityText': eligibilityText,
+        if (audience != null) 'audience': audience,
+        if (regionText != null) 'regionText': regionText,
+        if (participationMode != null) 'participationMode': participationMode,
       };
 
   static RadarEvent fromJson(Map<String, dynamic> j) {
@@ -134,6 +213,13 @@ class RadarEvent {
       isFree: j['isFree'] as bool?,
       price: j['price'] as String?,
       placeless: j['placeless'] as bool? ?? false,
+      applicationStatus: j['applicationStatus'] as String?,
+      deadlinePrecision: j['deadlinePrecision'] as String?,
+      lastVerifiedAt: DateTime.tryParse(j['lastVerifiedAt'] as String? ?? ''),
+      eligibilityText: j['eligibilityText'] as String?,
+      audience: j['audience'] as String?,
+      regionText: j['regionText'] as String?,
+      participationMode: j['participationMode'] as String?,
     );
   }
 }

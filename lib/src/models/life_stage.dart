@@ -8,7 +8,7 @@ enum LifeStage {
   student(
     LocalizedText(ko: '학생', en: 'Student'),
     {'student', 'career', 'language'},
-    {EventCategory.scholarship, EventCategory.hackathon},
+    {EventCategory.scholarship, EventCategory.hackathon, EventCategory.contest},
   ),
   jobSeeker(LocalizedText(ko: '구직 중', en: 'Job seeking'), {'career', 'networking'}, {EventCategory.job}),
   employee(
@@ -39,7 +39,7 @@ enum LifeStage {
   final Set<EventCategory> categories;
 
   /// 행사가 이 상황에 맞는지.
-  bool fits(RadarEvent e) => categories.contains(e.category) || e.tags.any(tags.contains);
+  bool fits(RadarEvent e) => !(this == LifeStage.student && e.isApplication && (e.audience == 'restricted' || e.audience == 'unknown')) && (categories.contains(e.category) || e.tags.any(tags.contains));
 
   static LifeStage? byName(String? name) => name == null ? null : values.asNameMap()[name];
 }

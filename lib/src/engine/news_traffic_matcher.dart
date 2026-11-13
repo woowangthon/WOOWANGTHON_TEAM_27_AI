@@ -33,7 +33,7 @@ class NewsTrafficEvaluation {
   final String planId, scheduleVersion, tripId, tripVersion;
   final NewsTrafficImpact impact;
   final DateTime evaluatedAt;
-  static const ruleVersion = 'news-traffic-1.1';
+  static const ruleVersion = 'news-traffic-1.2';
   bool get visible => decision != NewsTrafficDecision.ignore;
   bool get notificationEligible => const [
     NewsTrafficDecision.caution,
@@ -135,7 +135,17 @@ class NewsTrafficMatcher {
         hadNotice ? NewsTrafficDecision.resolved : NewsTrafficDecision.ignore;
     var decision = NewsTrafficDecision.needsReview;
     var reason = 'INSUFFICIENT_MATCH_DATA';
-    if (impact.demo != (plan.source == 'sample')) {
+    if (!impact.domestic) {
+      decision = NewsTrafficDecision.ignore;
+      reason = 'DOMESTIC_SUBJECT_UNCONFIRMED';
+    } else if (!impact.hasTransportEvidence) {
+      decision = NewsTrafficDecision.ignore;
+      reason = 'TRANSPORT_EFFECT_NOT_REPORTED';
+    } else if (impact.type == 'STRIKE' &&
+        (trip == null || space != 'ROUTE_MATCH' || mode != 'APPLICABLE')) {
+      decision = hadNotice ? NewsTrafficDecision.resolved : NewsTrafficDecision.ignore;
+      reason = 'STRIKE_ROUTE_NOT_CONFIRMED';
+    } else if (impact.demo != (plan.source == 'sample')) {
       decision = NewsTrafficDecision.ignore;
       reason = 'DEMO_LIVE_SEPARATION';
     } else if (!impact.conflict &&
@@ -276,16 +286,19 @@ class NewsTrafficMatcher {
       }
     }
     final point = impact.verifiedPoint;
+    final radius = impact.verifiedRadiusKm;
     if (point != null &&
+        radius != null &&
         plan.location != null &&
-        RouteMatcher.haversineKm(point, plan.location!) <= nearbyKm) {
+        RouteMatcher.haversineKm(point, plan.location!) <= radius) {
       return 'NEARBY';
     }
     // A provider polyline supplies proximity only, never a verified road/line ID.
     if (point != null &&
+        radius != null &&
         trip != null &&
         trip.points.length > 1 &&
-        RouteMatcher.distanceToPolylineKm(point, trip.points) <= nearbyKm) {
+        RouteMatcher.distanceToPolylineKm(point, trip.points) <= radius) {
       return 'NEARBY';
     }
     if (impact.regions.isNotEmpty && plan.location != null) {

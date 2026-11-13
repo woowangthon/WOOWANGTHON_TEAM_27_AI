@@ -1,4 +1,5 @@
 import 'models.dart';
+import 'domestic_news.dart';
 import '../engine/route_matcher.dart';
 
 /// 뉴스에서 추출한 대중교통 파업 정보 (팀 문서 「뉴스 파업정보 추출 구현 지침」의 핵심 필드).
@@ -55,8 +56,10 @@ class TransitStrike {
   final String? model;
 
   /// 앞으로 이동에 영향을 줄 수 있는 상태 (예고·조건부·진행 중). 철회·유보·종료·과거는 경고하지 않는다.
+  bool get isDomestic => DomesticNews.accepts('$articleTitle $quote $operator');
   bool get isActive =>
-      status == StrikeStatus.scheduled || status == StrikeStatus.conditional || status == StrikeStatus.ongoing;
+      isDomestic &&
+      (status == StrikeStatus.scheduled || status == StrikeStatus.conditional || status == StrikeStatus.ongoing);
 
   TransitStrike copyWith({int? sourceCount}) => TransitStrike(
         id: id,

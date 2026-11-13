@@ -27,6 +27,7 @@ class RouteMatcher {
     final samples = sample(route, sampleKm);
     final result = <RouteOpportunity>[];
     for (final e in events) {
+      if (e.placeless) continue;
       final overlaps = !e.end.isBefore(tripStart) && !e.start.isAfter(tripEnd);
       if (!overlaps) continue;
       final d = distanceToPolylineKm(e.location, samples);

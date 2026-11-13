@@ -203,15 +203,8 @@ void main() {
           strikes: s,
         );
 
-    test('일정 날짜·지역이 맞으면 참고 카드 (인용·기사 링크, AI 재작성 제외)', () {
-      final card = build([
-        strike,
-      ]).singleWhere((i) => i.id.startsWith('strike:'));
-      expect(card.title.ko, contains('파업 예고'));
-      expect(card.why.ko, contains('20일 이후 공동 총파업'));
-      expect(card.why.ko, contains('참고용'));
-      expect(card.sources.single.url, 'https://news.example.com/a2');
-      expect(InsightWriter.isEligible(card), isFalse);
+    test('날짜·지역만 같은 파업은 이용 노선 확인 없이 카드로 연결하지 않는다', () {
+      expect(build([strike]).where((i) => i.id.startsWith('strike:')), isEmpty);
     });
 
     test('날짜가 안 맞거나, 철회됐거나, 일정이 끝났으면 카드 없음', () {

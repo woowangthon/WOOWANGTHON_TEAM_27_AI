@@ -134,7 +134,7 @@ void main(List<String> args) {
   check(
     'unknown direction cannot become direct recommendation',
     evaluate(route: trip(), changes: {'scope': directedScope}).decision ==
-        NewsTrafficDecision.caution,
+        NewsTrafficDecision.ignore,
   );
   check(
     'opposite direction is unrelated',
@@ -166,9 +166,48 @@ void main(List<String> args) {
   );
   check(
     'same region is reference only',
-    evaluate().decision == NewsTrafficDecision.reference,
+    evaluate().decision == NewsTrafficDecision.ignore,
   );
   check('reference never notifies', !evaluate().notificationEligible);
+  check('Spain cached record cannot affect matching Korean route',
+    evaluate(route: trip(), changes: {
+      'event_name': '스페인 전국 버스 파업',
+      'evidence': [{'quote': '스페인 전국 버스 파업 예고'}],
+    }).decision == NewsTrafficDecision.ignore);
+  check('Korean publisher alone is not domestic geography',
+    evaluate(route: trip(), changes: {
+      'event_name': '전국 버스 파업',
+      'evidence': [{'quote': '전국 버스 파업 예고'}],
+    }).decision == NewsTrafficDecision.ignore);
+  final area = <String, dynamic>{
+    'type': 'CONGESTION_FORECAST',
+    'event_name': '서울 축제 교통 혼잡 전망',
+    'modes': ['car'],
+    'scope': [{'region': '서울'}],
+    'verified_point': [37.5663, 126.9779],
+    'point_reference_source': 'fixture affected street',
+    'affected_radius_m': 300,
+    'area_reference_source': 'fixture reported impact extent',
+    'evidence': [{'quote': '서울 축제로 차량 교통 혼잡이 예상된다'}],
+  };
+  check('reported forecast inside verified area notifies',
+    evaluate(route: trip(modes: {'car'}, ids: {}), changes: area).notificationEligible);
+  check('event listing alone cannot create an impact',
+    !evaluate(route: trip(modes: {'car'}, ids: {}), changes: {
+      ...area, 'evidence': [{'quote': '서울 축제가 개최된다'}],
+    }).notificationEligible);
+  check('negated forecast never notifies',
+    !evaluate(route: trip(modes: {'car'}, ids: {}), changes: {
+      ...area, 'evidence': [{'quote': '서울 차량 교통 혼잡은 예상되지 않는다'}],
+    }).notificationEligible);
+  check('point without verified extent never notifies',
+    !evaluate(route: trip(modes: {'car'}, ids: {}), changes: {
+      ...area, 'affected_radius_m': null,
+    }).notificationEligible);
+  check('outside verified extent never notifies',
+    !evaluate(route: trip(modes: {'car'}, ids: {}), changes: {
+      ...area, 'verified_point': [37.58, 126.9779],
+    }).notificationEligible);
   check(
     'conditional never promotes',
     evaluate(route: trip(), changes: {'status': 'CONDITIONAL'}).decision ==
@@ -176,7 +215,7 @@ void main(List<String> args) {
   );
   check(
     'unknown mode stays caution',
-    evaluate(route: trip(modes: {})).decision == NewsTrafficDecision.caution,
+    evaluate(route: trip(modes: {})).decision == NewsTrafficDecision.ignore,
   );
   check(
     'different verified bus ID ignored',
@@ -292,7 +331,7 @@ void main(List<String> args) {
   };
   check(
     'verified nearby, no trip gives caution',
-    evaluate(changes: near).decision == NewsTrafficDecision.caution,
+    evaluate(changes: near).decision == NewsTrafficDecision.ignore,
   );
   final a = evaluate(route: trip()),
       b = evaluate(route: trip(), changes: {'version': 2});
@@ -360,7 +399,7 @@ void main(List<String> args) {
           now: now,
           strikes: [legacy],
         )
-        .any((i) => i.id.startsWith('strike:')),
+        .every((i) => !i.id.startsWith('strike:')),
   );
   final official = TrafficNotice(
     id: 'n',
