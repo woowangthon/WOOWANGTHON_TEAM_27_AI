@@ -1,5 +1,5 @@
 name: liferadar_core
-description: LifeRadar의 판단 엔진과 AI 모듈 — 도메인 모델, 인사이트·경로·교통 판별 규칙, 취향 학습, Gemini 문장 생성과 근거 검증.
+description: LifeRadar core models, insight and route rules, preference learning, and grounded AI assistance.
 version: 0.3.0
 publish_to: none
 repository: https://github.com/woowangthon/WOOWANGTHON_TEAM_27_AI
