@@ -197,4 +197,23 @@ void main() {
       expect(r.text, contains('Busan trip'));
     });
   });
+
+  group('범위 (코드 + 모델 규칙)', () {
+    test('계산·코드·숙제는 범위 밖 — 모델에 보내지 않는다', () {
+      for (final q in ['2+2는 몇이야?', '12 * 7', '파이썬으로 정렬 코드 짜줘', 'solve this equation', 'write python code', '수학 숙제 도와줘']) {
+        expect(Assistant.isOffTopic(q), isTrue, reason: q);
+      }
+    });
+    test('행사·일정 질문은 범위 안 (날짜 숫자가 있어도)', () {
+      for (final q in ['이번 주말 서울에서 뭐 하지?', '11월 20일 일정에 영향 줄 만한 거 있어?', '재즈 공연 있어?', 'Any concerts this week?', '마감 임박한 창업 공고', '안녕', '11/20 부산 행사', 'Busan trip 11/20-11/22', '2026-11-20 전시']) {
+        expect(Assistant.isOffTopic(q), isFalse, reason: q);
+      }
+    });
+    test('범위 밖 안내는 행사 카드 없이 예시 질문 하나', () {
+      final r = Assistant.offTopicReply();
+      expect(r.eventIds, isEmpty);
+      expect(r.text, contains('행사와 일정'));
+      expect(Assistant.systemInstruction, contains('ONLY help with LifeRadar topics'));
+    });
+  });
 }
