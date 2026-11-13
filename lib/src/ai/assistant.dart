@@ -33,6 +33,14 @@ abstract final class Assistant {
 You are LifeRadar, an AI coworker that looks after a young person's schedule in Korea.
 Reply in {LANG}. Be warm, concise (at most 4 short sentences), and practical.
 
+Scope: you ONLY help with LifeRadar topics. In scope (answer normally, recommending fitting
+candidate events): finding events, exhibitions, concerts, festivals, contests and startup/job
+notices; the user's plans and schedule; deadlines; traffic, strikes or weather that affect a plan;
+how to use this app. Out of scope: math, coding, homework, general knowledge or trivia, translation,
+unrelated news, opinions. Only for out-of-scope requests: reply in ONE short sentence that you help
+with events and plans, then offer one concrete example question such as "What can I do this
+weekend?" (never repeat the user's question), with empty event_ids and actions.
+
 Use ONLY the data in CONTEXT: the user's plans, candidate events (with ids), and signals.
 - Answer the latest QUESTION directly. Greetings, feedback, and general conversation do not
   request event recommendations: respond naturally with empty event_ids and actions.
@@ -284,6 +292,28 @@ Use ONLY the data in CONTEXT: the user's plans, candidate events (with ids), and
           m[0]!,
     ];
   }
+
+  /// 일정·행사와 무관한 것이 분명한 질문 (계산식, 코드 작성, 숙제·번역 요청).
+  /// 이런 질문은 Gemini에 보내지 않고 바로 안내한다 — 할당량도 아끼고, 모델이 답해 버리지 않게.
+  /// 애매한 질문은 false (모델의 범위 규칙이 판단).
+  static bool isOffTopic(String question) {
+    final q = question.toLowerCase().trim();
+    if (RegExp(r'^[\d\s+*x×÷=^().,?]+$').hasMatch(q) && RegExp(r'\d\s*[+*x×÷^=]').hasMatch(q)) return true; // 2+2?
+    // "/"와 "-"는 날짜(11/20, 11-20)에도 쓰이므로 계산 기호로 보지 않는다.
+    if (RegExp(r'\d+\s*[+*×÷^]\s*\d+').hasMatch(q)) return true;
+    return RegExp(
+      r'코드|코딩|프로그래밍|파이썬|자바스크립트|알고리즘|정렬\s*코드|함수\s*(짜|만들)|수학|방정식|미분|적분|숙제|과제\s*(풀|해)|번역해|'
+      r'\bcode\b|coding|program(ming)?\b|python|javascript|algorithm|equation|homework|solve\b|translate\b|derivative|integral',
+    ).hasMatch(q);
+  }
+
+  /// 범위 밖 질문에 대한 짧은 안내 (AI 없이).
+  static AssistantReply offTopicReply({String lang = 'ko'}) => AssistantReply(
+        text: lang == 'ko'
+            ? '저는 행사와 일정에 관한 것만 도와드려요. 예: “이번 주말 서울에서 뭐 하지?”'
+            : 'I can only help with events and your plans. Try: “What can I do in Seoul this weekend?”',
+        eventIds: const [],
+      );
 
   /// AI 없이 (키 없음·오류): 같은 후보로 규칙 문장.
   static AssistantReply fallback(AssistantQuery q, List<RadarEvent> candidates, {String lang = 'ko'}) {
