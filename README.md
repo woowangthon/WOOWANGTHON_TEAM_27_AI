@@ -1,6 +1,5 @@
 # LifeRadar AI — 판단 엔진과 AI 모듈
 
-
 > **WOOWANGTHON TEAM 27** · 2026 AI 우왕톤 · 주제 *"AI는 동료가 될 수 있을까?"*
 >
 > 저장소: [FE (Flutter 앱)](https://github.com/woowangthon/WOOWANGTHON_TEAM_27_FE) · [BE (데이터 파이프라인)](https://github.com/woowangthon/WOOWANGTHON_TEAM_27_BE) · **AI (이 저장소)**
